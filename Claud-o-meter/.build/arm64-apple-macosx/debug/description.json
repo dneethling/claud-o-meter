@@ -1,0 +1,632 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.xctest/Contents/MacOS/Claud-o-meterPackageTests",
+      "packagePath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter",
+      "productName" : "Claud-o-meterPackageTests"
+    }
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.Claud-o-meter-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/sources",
+      "importPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/Sources/ClaudOMeterApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "Claud_o_meter",
+      "moduleOutputPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules/Claud_o_meter.swiftmodule",
+      "objects" : [
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/ClaudOMeterApp.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "Claud_o_meter_main",
+        "-parse-as-library",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "claud_o_meter"
+      ],
+      "outputFileMapPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/ClaudOMeterApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules/Claud_o_meter.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/Sources/ClaudOMeterApp.swift"
+      ],
+      "tempsPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.Claud-o-meterPackageTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/sources",
+      "importPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules/ClaudOMeterTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "Claud_o_meterPackageTests",
+      "moduleOutputPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules/Claud_o_meterPackageTests.swiftmodule",
+      "objects" : [
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/include/Claud-o-meterPackageTests-Swift.h",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "claud_o_meter"
+      ],
+      "outputFileMapPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules/Claud_o_meterPackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.ClaudOMeterTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build/sources",
+      "importPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/Tests/PlaceholderTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meter"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "ClaudOMeterTests",
+      "moduleOutputPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules/ClaudOMeterTests.swiftmodule",
+      "objects" : [
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build/PlaceholderTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "claud_o_meter"
+      ],
+      "outputFileMapPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build/PlaceholderTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules/ClaudOMeterTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/Tests/PlaceholderTests.swift"
+      ],
+      "tempsPath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "ClaudOMeterTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "ClaudOMeterTests",
+      "-package-name",
+      "claud_o_meter",
+      "-c",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/Tests/PlaceholderTests.swift",
+      "-I",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "claud_o_meter",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "Claud_o_meter" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "Claud_o_meter",
+      "-package-name",
+      "claud_o_meter",
+      "-c",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/Sources/ClaudOMeterApp.swift",
+      "-I",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "Claud_o_meter_main",
+      "-parse-as-library",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "claud_o_meter",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "Claud_o_meterPackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "Claud_o_meterPackageTests",
+      "-package-name",
+      "claud_o_meter",
+      "-c",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.derived/runner.swift",
+      "-I",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/include/Claud-o-meterPackageTests-Swift.h",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "claud_o_meter",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "ClaudOMeterTests" : [
+      "Claud_o_meter"
+    ],
+    "Claud_o_meter" : [
+
+    ],
+    "Claud_o_meterPackageTests" : [
+      "ClaudOMeterTests",
+      "Claud_o_meter"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meter-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meter-entitlement.plist"
+    },
+    "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meter.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/ClaudOMeterApp.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meter.product/Objects.LinkFileList"
+    },
+    "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build/PlaceholderTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/ClaudOMeterApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/runner.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/Tests/PlaceholderTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/ClaudOMeterTests.build/sources"
+    },
+    "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/Sources/ClaudOMeterApp.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meter.build/sources"
+    },
+    "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meterPackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud_o_meterPackageTests.build/sources"
+    },
+    "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

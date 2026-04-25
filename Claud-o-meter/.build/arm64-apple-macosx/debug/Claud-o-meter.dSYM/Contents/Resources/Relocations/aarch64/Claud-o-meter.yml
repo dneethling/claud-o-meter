@@ -1,0 +1,34 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/darrenneethling/Downloads/claude-usage-widget/Claud-o-meter/.build/arm64-apple-macosx/debug/Claud-o-meter'
+relocations:
+  - { offset: 0xEB2D8, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter0A9OMeterAppV4mainyyFZ', symObjAddr: 0x0, symBinAddr: 0x100001140, symSize: 0xC8 }
+  - { offset: 0xEB35B, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateCMa', symObjAddr: 0xC8, symBinAddr: 0x100001208, symSize: 0x24 }
+  - { offset: 0xEB463, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateC10statusItem33_11EBEA4C1529EC042D8F2B29096CC43BLLSo08NSStatusF0CSgvpfi', symObjAddr: 0x12C, symBinAddr: 0x10000126C, symSize: 0x8 }
+  - { offset: 0xEB47B, size: 0x8, addend: 0x0, symName: '_$sSo6NSMenuCMa', symObjAddr: 0x794, symBinAddr: 0x1000018D4, symSize: 0x60 }
+  - { offset: 0xEB48F, size: 0x8, addend: 0x0, symName: '_$sSo10NSMenuItemCMa', symObjAddr: 0x904, symBinAddr: 0x100001A44, symSize: 0x60 }
+  - { offset: 0xEB4A3, size: 0x8, addend: 0x0, symName: '_$sSo7NSImageCMa', symObjAddr: 0x9C0, symBinAddr: 0x100001B00, symSize: 0x60 }
+  - { offset: 0xEB4B7, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateCfETo', symObjAddr: 0xBF4, symBinAddr: 0x100001D34, symSize: 0x30 }
+  - { offset: 0xEB4E5, size: 0x8, addend: 0x0, symName: '_$sSo12NSStatusItemCSgWOh', symObjAddr: 0xC24, symBinAddr: 0x100001D64, symSize: 0x30 }
+  - { offset: 0xEB4F9, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter0A9OMeterAppVMa', symObjAddr: 0xC6C, symBinAddr: 0x100001DAC, symSize: 0x14 }
+  - { offset: 0xEB525, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter0A9OMeterAppV4mainyyFZ', symObjAddr: 0x0, symBinAddr: 0x100001140, symSize: 0xC8 }
+  - { offset: 0xEB58E, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateCACycfC', symObjAddr: 0xEC, symBinAddr: 0x10000122C, symSize: 0x28 }
+  - { offset: 0xEB5A2, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter0A9OMeterAppV5$mainyyFZ', symObjAddr: 0x114, symBinAddr: 0x100001254, symSize: 0x14 }
+  - { offset: 0xEB5C2, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter0A9OMeterAppVACycfC', symObjAddr: 0x128, symBinAddr: 0x100001268, symSize: 0x4 }
+  - { offset: 0xEB655, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateC10statusItem33_11EBEA4C1529EC042D8F2B29096CC43BLLSo08NSStatusF0CSgvg', symObjAddr: 0x134, symBinAddr: 0x100001274, symSize: 0x6C }
+  - { offset: 0xEB679, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateC10statusItem33_11EBEA4C1529EC042D8F2B29096CC43BLLSo08NSStatusF0CSgvs', symObjAddr: 0x1A0, symBinAddr: 0x1000012E0, symSize: 0x94 }
+  - { offset: 0xEB6AC, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateC10statusItem33_11EBEA4C1529EC042D8F2B29096CC43BLLSo08NSStatusF0CSgvM', symObjAddr: 0x234, symBinAddr: 0x100001374, symSize: 0x50 }
+  - { offset: 0xEB6D0, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateC10statusItem33_11EBEA4C1529EC042D8F2B29096CC43BLLSo08NSStatusF0CSgvM.resume.0', symObjAddr: 0x284, symBinAddr: 0x1000013C4, symSize: 0x1C }
+  - { offset: 0xEB707, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateC29applicationDidFinishLaunchingyy10Foundation12NotificationVF', symObjAddr: 0x2A0, symBinAddr: 0x1000013E0, symSize: 0x4F4 }
+  - { offset: 0xEB88F, size: 0x8, addend: 0x0, symName: '_$sSo7NSImageC16systemSymbolName24accessibilityDescriptionABSgSS_SSSgtcfCTO', symObjAddr: 0x7F4, symBinAddr: 0x100001934, symSize: 0xE4 }
+  - { offset: 0xEB8AE, size: 0x8, addend: 0x0, symName: '_$sSo6NSMenuCABycfC', symObjAddr: 0x8D8, symBinAddr: 0x100001A18, symSize: 0x2C }
+  - { offset: 0xEB8CD, size: 0x8, addend: 0x0, symName: '_$sSo10NSMenuItemC5title6action13keyEquivalentABSS_10ObjectiveC8SelectorVSgSStcfC', symObjAddr: 0x964, symBinAddr: 0x100001AA4, symSize: 0x5C }
+  - { offset: 0xEB8FE, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateC29applicationDidFinishLaunchingyy10Foundation12NotificationVFTo', symObjAddr: 0xA20, symBinAddr: 0x100001B60, symSize: 0xE0 }
+  - { offset: 0xEB912, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateCACycfc', symObjAddr: 0xB00, symBinAddr: 0x100001C40, symSize: 0x8C }
+  - { offset: 0xEB936, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateCACycfcTo', symObjAddr: 0xB8C, symBinAddr: 0x100001CCC, symSize: 0x20 }
+  - { offset: 0xEB94A, size: 0x8, addend: 0x0, symName: '_$s13Claud_o_meter11AppDelegateCfD', symObjAddr: 0xBAC, symBinAddr: 0x100001CEC, symSize: 0x48 }
+  - { offset: 0xEB96E, size: 0x8, addend: 0x0, symName: _Claud_o_meter_main, symObjAddr: 0xC54, symBinAddr: 0x100001D94, symSize: 0x18 }
+  - { offset: 0xEB982, size: 0x8, addend: 0x0, symName: '_$sSo6NSMenuCABycfcTO', symObjAddr: 0xC80, symBinAddr: 0x100001DC0, symSize: 0x18 }
+  - { offset: 0xEB996, size: 0x8, addend: 0x0, symName: '_$sSo10NSMenuItemC5title6action13keyEquivalentABSS_10ObjectiveC8SelectorVSgSStcfcTO', symObjAddr: 0xC98, symBinAddr: 0x100001DD8, symSize: 0x9C }
+  - { offset: 0xEBA76, size: 0x8, addend: 0x0, symName: _NSVariableStatusItemLength, symObjAddr: 0xD38, symBinAddr: 0x1000024D8, symSize: 0x0 }
+...
