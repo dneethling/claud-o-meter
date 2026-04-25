@@ -40,16 +40,9 @@ class AuthManager: NSObject, WKNavigationDelegate, WKUIDelegate {
     // MARK: - Auth Flow
 
     func attemptAutoLogin() {
-        if let orgId = orgId {
-            // Load claude.ai so cookies are in JS context for fetch()
-            webView.load(URLRequest(url: URL(string: "https://claude.ai/")!))
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-                self?.onAuthSuccess?(orgId)
-            }
-        } else {
-            // Try importing cookies from the user's browser first
-            importFromBrowser()
-        }
+        // Always import fresh cookies from the browser — they rotate frequently.
+        // The orgId tells us which org to fetch, but cookies must be refreshed every launch.
+        importFromBrowser()
     }
 
     func showLogin() {
@@ -62,8 +55,10 @@ class AuthManager: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// If successful, inject into WKWebView and start fetching.
     /// If not, fall back to the embedded WKWebView login.
     private func importFromBrowser() {
+        fputs("[CM] importFromBrowser: starting\n", stderr)
         do {
             let result = try BrowserCookieImporter.importCookies()
+            fputs("[CM] importFromBrowser: got \(result.cookies.count) cookies from \(result.browserName), orgId=\(result.orgId ?? "nil")\n", stderr)
 
             // Inject cookies into WKWebView's cookie store
             let cookieStore = dataStore.httpCookieStore
@@ -77,23 +72,32 @@ class AuthManager: NSObject, WKNavigationDelegate, WKUIDelegate {
             group.notify(queue: .main) { [weak self] in
                 guard let self = self else { return }
 
-                if let orgId = result.orgId {
+                let effectiveOrgId = result.orgId ?? self.orgId
+                if let orgId = effectiveOrgId {
                     self.orgId = orgId
                     // Load claude.ai so the WKWebView has the cookies in context
                     self.webView.load(URLRequest(url: URL(string: "https://claude.ai/")!))
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        fputs("[CM] importFromBrowser: triggering onAuthSuccess with orgId=\(orgId)\n", stderr)
                         self.onAuthSuccess?(orgId)
                     }
-                    print("[Claud-o-meter] Imported \(result.cookies.count) cookies from \(result.browserName)")
                 } else {
-                    // Got cookies but no org ID — try embedded login
+                    fputs("[CM] importFromBrowser: no orgId, showing login\n", stderr)
                     self.showEmbeddedLogin()
                 }
             }
         } catch {
-            print("[Claud-o-meter] Browser import failed: \(error.localizedDescription)")
-            // Fall back to embedded WKWebView login
-            showEmbeddedLogin()
+            fputs("[CM] importFromBrowser FAILED: \(error.localizedDescription)\n", stderr)
+            // Fall back: if we have a stored orgId, try loading claude.ai anyway
+            if let orgId = orgId {
+                fputs("[CM] importFromBrowser: falling back to stored orgId\n", stderr)
+                webView.load(URLRequest(url: URL(string: "https://claude.ai/")!))
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                    self?.onAuthSuccess?(orgId)
+                }
+            } else {
+                showEmbeddedLogin()
+            }
         }
     }
 

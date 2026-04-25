@@ -1,4 +1,10 @@
 import AppKit
+import Darwin
+
+func cmlog(_ msg: String) { fputs("[CM] \(msg)\n", stderr) }
+
+// Strong reference to prevent ARC deallocation (NSApplication.delegate is weak)
+private var _delegate: AppDelegate?
 
 @main
 struct ClaudOMeterApp {
@@ -24,8 +30,10 @@ struct ClaudOMeterApp {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
 
-        let delegate = AppDelegate()
-        app.delegate = delegate
+        // NSApplication.delegate is weak — store delegate in a static var
+        // so ARC doesn't deallocate it (and the menu bar icon with it).
+        _delegate = AppDelegate()
+        app.delegate = _delegate
         app.run()
     }
 }
@@ -40,11 +48,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var launchAtLoginManager: LaunchAtLoginManager!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        cmlog("didFinishLaunching START")
         authManager = AuthManager()
+        cmlog("authManager created")
         launchAtLoginManager = LaunchAtLoginManager()
+        cmlog("launchAtLoginManager created")
         menuBarController = MenuBarController(launchAtLogin: launchAtLoginManager)
+        cmlog("menuBarController created")
         usageFetcher = UsageFetcher(authManager: authManager)
+        cmlog("usageFetcher created")
         notificationManager = NotificationManager()
+        cmlog("notificationManager created")
 
         authManager.onAuthSuccess = { [weak self] orgId in
             guard let self = self else { return }
@@ -96,6 +110,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.authManager.logout()
         }
 
+        cmlog("all callbacks wired, calling attemptAutoLogin")
         authManager.attemptAutoLogin()
+        cmlog("didFinishLaunching END")
     }
 }

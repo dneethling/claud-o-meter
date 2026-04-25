@@ -14,11 +14,15 @@ class MenuBarController {
     init(launchAtLogin: LaunchAtLoginManager) {
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.launchAtLogin = launchAtLogin
+        fputs("[CM] MenuBarController.init: statusItem=\(statusItem), button=\(String(describing: statusItem.button)), isOnMainThread=\(Thread.isMainThread)\n", stderr)
         showLoading()
     }
 
     func showLoading() {
-        guard let button = statusItem.button else { return }
+        guard let button = statusItem.button else {
+            fputs("[CM] showLoading: button is NIL!\n", stderr)
+            return
+        }
         button.image = NSImage(systemSymbolName: "gauge.with.dots.needle.33percent", accessibilityDescription: "Claude Usage")
         button.title = " --% · --%w"
         buildMenu(usage: nil, state: .loading)
