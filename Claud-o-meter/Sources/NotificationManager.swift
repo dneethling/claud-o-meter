@@ -3,7 +3,7 @@ import UserNotifications
 @MainActor
 class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
-    private let center = UNUserNotificationCenter.current()
+    private var center: UNUserNotificationCenter?
     private var permissionGranted = false
     private var lastSessionAlert: AlertLevel = .none
     private var lastWeeklyAlert: AlertLevel = .none
@@ -18,10 +18,17 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
     override init() {
         super.init()
-        center.delegate = self
+        // UNUserNotificationCenter crashes if not running inside a .app bundle.
+        // Guard against it so `swift run` and bare binary execution still work.
+        if Bundle.main.bundleIdentifier != nil {
+            let c = UNUserNotificationCenter.current()
+            c.delegate = self
+            self.center = c
+        }
     }
 
     func requestPermission() {
+        guard let center = center else { return }
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             Task { @MainActor in
                 self.permissionGranted = granted
@@ -74,7 +81,7 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
-        center.add(request)
+        center?.add(request)
     }
 
     nonisolated func userNotificationCenter(
