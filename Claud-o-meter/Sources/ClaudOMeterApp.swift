@@ -1,37 +1,32 @@
 import AppKit
 import Darwin
 
-func cmlog(_ msg: String) { fputs("[CM] \(msg)\n", stderr) }
+func cmlog(_ msg: String) {
+    let line = "[CM] \(msg)\n"
+    fputs(line, stderr)
+    // Also write to file since `open` doesn't capture stderr
+    if let data = line.data(using: .utf8) {
+        let logFile = "/tmp/claudometer.log"
+        if FileManager.default.fileExists(atPath: logFile) {
+            if let fh = FileHandle(forWritingAtPath: logFile) {
+                fh.seekToEndOfFile()
+                fh.write(data)
+                fh.closeFile()
+            }
+        } else {
+            FileManager.default.createFile(atPath: logFile, contents: data)
+        }
+    }
+}
 
-// Strong reference to prevent ARC deallocation (NSApplication.delegate is weak)
 private var _delegate: AppDelegate?
 
 @main
 struct ClaudOMeterApp {
     static func main() {
-        // Ensure only one instance runs at a time
-        let runningApps = NSWorkspace.shared.runningApplications.filter {
-            $0.bundleIdentifier == "com.claudometer.app"
-        }
-        if runningApps.count > 1 {
-            // Another instance is already running — quit silently
-            exit(0)
-        }
-
-        // Also check by process name for dev builds (no bundle ID)
-        let myPID = ProcessInfo.processInfo.processIdentifier
-        let sameName = NSWorkspace.shared.runningApplications.filter {
-            $0.localizedName == "Claud-o-meter" && $0.processIdentifier != myPID
-        }
-        if !sameName.isEmpty {
-            exit(0)
-        }
-
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
 
-        // NSApplication.delegate is weak — store delegate in a static var
-        // so ARC doesn't deallocate it (and the menu bar icon with it).
         _delegate = AppDelegate()
         app.delegate = _delegate
         app.run()
@@ -50,18 +45,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         cmlog("didFinishLaunching START")
         authManager = AuthManager()
-        cmlog("authManager created")
         launchAtLoginManager = LaunchAtLoginManager()
-        cmlog("launchAtLoginManager created")
         menuBarController = MenuBarController(launchAtLogin: launchAtLoginManager)
-        cmlog("menuBarController created")
         usageFetcher = UsageFetcher(authManager: authManager)
-        cmlog("usageFetcher created")
         notificationManager = NotificationManager()
-        cmlog("notificationManager created")
+        cmlog("all components created")
 
         authManager.onAuthSuccess = { [weak self] orgId in
             guard let self = self else { return }
+            cmlog("onAuthSuccess: orgId=\(orgId.prefix(8))")
             self.menuBarController.showLoading()
             self.usageFetcher.startPolling(orgId: orgId)
 
@@ -71,18 +63,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         authManager.onAuthRequired = { [weak self] in
+            cmlog("onAuthRequired")
             self?.usageFetcher.stopPolling()
             self?.menuBarController.showLoginRequired()
             self?.authManager.showLogin()
         }
 
         usageFetcher.onUsageUpdate = { [weak self] usage in
+            cmlog("onUsageUpdate: session=\(usage.session?.utilization ?? -1)")
             self?.menuBarController.update(with: usage)
             self?.notificationManager.check(usage)
         }
 
         usageFetcher.onAuthExpired = { [weak self] in
             guard let self = self else { return }
+            cmlog("onAuthExpired")
             self.usageFetcher.stopPolling()
             self.authManager.attemptSilentRefresh { success in
                 if success {
@@ -97,6 +92,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         usageFetcher.onError = { [weak self] message in
+            cmlog("onError: \(message)")
             self?.menuBarController.showError(message)
         }
 
@@ -110,7 +106,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.authManager.logout()
         }
 
-        cmlog("all callbacks wired, calling attemptAutoLogin")
+        cmlog("calling attemptAutoLogin")
         authManager.attemptAutoLogin()
         cmlog("didFinishLaunching END")
     }

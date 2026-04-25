@@ -46,20 +46,18 @@ class MenuBarController {
 
     func update(with usage: UsageData) {
         self.currentUsage = usage
-        guard let button = statusItem.button else { return }
+        guard let button = statusItem.button else {
+            cmlog("update: button is NIL")
+            return
+        }
+        cmlog("update: setting button with session=\(usage.session?.utilization ?? -1)")
 
         let sessionPct = usage.session?.utilization ?? 0
         let weeklyPct = usage.weeklyAll?.utilization ?? 0
         let level = ProgressBar.color(for: sessionPct)
 
         button.image = NSImage(systemSymbolName: level.sfSymbolName, accessibilityDescription: "Claude Usage")
-
-        let title = " \(Int(sessionPct))% · \(Int(weeklyPct))%w"
-        let titleAttr = NSAttributedString(string: title, attributes: [
-            .foregroundColor: level.nsColor,
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-        ])
-        button.attributedTitle = titleAttr
+        button.title = " \(Int(sessionPct))% · \(Int(weeklyPct))%w"
         button.contentTintColor = level.nsColor
 
         buildMenu(usage: usage, state: .normal)
