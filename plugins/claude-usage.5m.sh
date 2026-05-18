@@ -39,14 +39,30 @@ color_for_pct() {
 progress_bar() {
   local pct="${1%%.*}"
   [ -z "$pct" ] && { echo ""; return; }
-  local width=20
+  local width=14
   local filled=$(( pct * width / 100 ))
   [ $filled -gt $width ] && filled=$width
+  [ $filled -lt 0 ] && filled=0
   local empty=$(( width - filled ))
   local bar=""
   for ((i=0; i<filled; i++)); do bar+="█"; done
   for ((i=0; i<empty; i++)); do bar+="░"; done
   echo "$bar"
+}
+
+# Print one metric block: a single info line + a bar line, consistent sizing.
+# Args: $1=label  $2=pct(raw)  $3=reset-text
+print_metric() {
+  local label="$1" pct="$2" reset="$3"
+  [ -z "$pct" ] && return
+  local pint clr bar info
+  pint=$(round "$pct")
+  clr=$(color_for_pct "$pint")
+  bar=$(progress_bar "$pint")
+  info="$label · ${pint}%"
+  [ -n "$reset" ] && info="$info · resets $reset"
+  echo "$info | size=12 color=#8E8E93"
+  echo "$bar | font=Menlo size=12 color=$clr"
 }
 
 # Compact bar for title: ▓▓▓▓░░░░ (8 chars)
@@ -220,47 +236,25 @@ echo "---"
 
 # Session
 if [ -n "$SESSION" ]; then
-  BAR=$(progress_bar "$S_I")
-  CLR=$(color_for_pct "$S_I")
-  RST=$(fmt_reset "$SESSION_RESET")
-  echo "SESSION (5hr window) | size=11 color=#999999"
-  echo "$BAR  ${SESSION}% | font=Menlo size=13 color=$CLR"
-  [ -n "$RST" ] && echo "  Resets $RST | size=12"
+  print_metric "Session · 5h" "$SESSION" "$(fmt_reset "$SESSION_RESET")"
   echo "---"
 fi
 
 # Weekly — all models
 if [ -n "$WEEK" ]; then
-  BAR=$(progress_bar "$W_I")
-  CLR=$(color_for_pct "$W_I")
-  RST=$(fmt_reset "$WEEK_RESET")
-  echo "WEEKLY · ALL MODELS | size=11 color=#999999"
-  echo "$BAR  ${WEEK}% | font=Menlo size=13 color=$CLR"
-  [ -n "$RST" ] && echo "  Resets $RST | size=12"
+  print_metric "Weekly · all models" "$WEEK" "$(fmt_reset "$WEEK_RESET")"
   echo "---"
 fi
 
 # Weekly — Sonnet
 if [ -n "$SONNET" ]; then
-  SN_I=$(round "$SONNET")
-  BAR=$(progress_bar "$SN_I")
-  CLR=$(color_for_pct "$SN_I")
-  RST=$(fmt_reset "$SONNET_RESET")
-  echo "WEEKLY · SONNET | size=11 color=#999999"
-  echo "$BAR  ${SONNET}% | font=Menlo size=13 color=$CLR"
-  [ -n "$RST" ] && echo "  Resets $RST | size=12"
+  print_metric "Weekly · Sonnet" "$SONNET" "$(fmt_reset "$SONNET_RESET")"
   echo "---"
 fi
 
 # Weekly — Opus (if present)
 if [ -n "$OPUS" ]; then
-  OP_I=$(round "$OPUS")
-  BAR=$(progress_bar "$OP_I")
-  CLR=$(color_for_pct "$OP_I")
-  RST=$(fmt_reset "$OPUS_RESET")
-  echo "WEEKLY · OPUS | size=11 color=#999999"
-  echo "$BAR  ${OPUS}% | font=Menlo size=13 color=$CLR"
-  [ -n "$RST" ] && echo "  Resets $RST | size=12"
+  print_metric "Weekly · Opus" "$OPUS" "$(fmt_reset "$OPUS_RESET")"
   echo "---"
 fi
 
