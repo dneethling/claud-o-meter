@@ -25,7 +25,9 @@ CRIT_PCT=85
 # --- Helpers -----------------------------------------------------------------
 color_for_pct() {
   local pct="${1%%.*}"  # strip decimal
-  [ -z "$pct" ] && { echo ""; return; }
+  # NEVER return empty — an empty color= makes SwiftBar render black
+  # (invisible on the dark menu bar). Default to green.
+  [ -z "$pct" ] && { echo "#34C759"; return; }
   if [ "$pct" -ge "$CRIT_PCT" ]; then
     echo "#FF3B30"  # red
   elif [ "$pct" -ge "$WARN_PCT" ]; then
@@ -61,7 +63,9 @@ print_metric() {
   bar=$(progress_bar "$pint")
   info="$label · ${pint}%"
   [ -n "$reset" ] && info="$info · resets $reset"
-  echo "$info | size=12 color=#8E8E93"
+  # No color= on the text line → SwiftBar uses the adaptive system label
+  # color (white in dark mode, black in light mode). Always readable.
+  echo "$info | size=12"
   echo "$bar | font=Menlo size=12 color=$clr"
 }
 
@@ -260,14 +264,10 @@ fi
 
 # Extra usage / overages
 if [ "$EXTRA_ENABLED" = "true" ]; then
-  echo "EXTRA USAGE | size=11 color=#999999"
   if [ -n "$EXTRA_UTIL" ]; then
-    EU_I=$(round "$EXTRA_UTIL")
-    BAR=$(progress_bar "$EU_I")
-    CLR=$(color_for_pct "$EU_I")
-    echo "$BAR  ${EXTRA_UTIL}% | font=Menlo size=13 color=$CLR"
+    print_metric "Extra usage" "$EXTRA_UTIL" ""
   else
-    echo "  Enabled (no usage yet) | size=12 color=#34C759"
+    echo "Extra usage · enabled (none used) | size=12"
   fi
   echo "---"
 fi
