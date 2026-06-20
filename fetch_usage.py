@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
-"""Fetch Claude.ai usage JSON, bypassing Cloudflare via curl_cffi (Chrome TLS fingerprint)."""
+"""Fetch Claude.ai usage JSON, bypassing Cloudflare via curl_cffi (Chrome TLS fingerprint).
+
+Writes the JSON body to stdout only on a 200 response with parseable JSON.
+On any other outcome (non-200, parse error, Cloudflare challenge HTML, account-session-invalid),
+writes a one-line diagnostic to stderr and exits 1 with empty stdout — so callers
+never write garbage into /tmp/claude-usage-raw.json.
+"""
+import json
 import sys
 from pathlib import Path
 
 from curl_cffi import requests
 
 CONFIG_PATH = Path.home() / ".claude-usage-widget.conf"
+FETCH_TIMEOUT_SECONDS = 15
+SNIPPET_MAX = 200
 
 
 def load_config():
@@ -33,6 +42,13 @@ def cookie_dict(cookie_str):
     return out
 
 
+def snippet(text: str) -> str:
+    """Compact one-line preview of a response body for stderr."""
+    if not text:
+        return "(empty)"
+    return text.replace("\n", " ").replace("\r", " ")[:SNIPPET_MAX]
+
+
 def main():
     cfg = load_config()
     url = cfg.get("USAGE_URL")
@@ -54,13 +70,29 @@ def main():
             headers=headers,
             cookies=cookie_dict(cookie),
             impersonate="chrome",
-            timeout=15,
+            timeout=FETCH_TIMEOUT_SECONDS,
         )
-        sys.stdout.write(resp.text)
-        sys.exit(0 if resp.status_code == 200 else 1)
     except Exception as e:
         sys.stderr.write(f"fetch error: {e}\n")
         sys.exit(1)
+
+    if resp.status_code != 200:
+        sys.stderr.write(f"HTTP {resp.status_code}: {snippet(resp.text)}\n")
+        sys.exit(1)
+
+    # Validate JSON before letting the body reach stdout. A 200 with Cloudflare
+    # HTML or an Anthropic error envelope still needs to be treated as a failure.
+    try:
+        body = json.loads(resp.text)
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"Non-JSON 200 response ({e}): {snippet(resp.text)}\n")
+        sys.exit(1)
+
+    if isinstance(body, dict) and body.get("type") == "error":
+        sys.stderr.write(f"API error envelope: {snippet(resp.text)}\n")
+        sys.exit(1)
+
+    sys.stdout.write(resp.text)
 
 
 if __name__ == "__main__":

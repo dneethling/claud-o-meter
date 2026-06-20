@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.darren.claude-usage-refresh</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>REPLACE_WITH_YOUR_HOME/Downloads/claude-usage-widget/.venv/bin/python</string>
+        <string>REPLACE_WITH_YOUR_HOME/Downloads/claude-usage-widget/refresh_cookie.py</string>
+    </array>
+
+    <!-- Run every 30 minutes. Cookies rotate every few hours so this is comfortably ahead. -->
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <!-- Also run once at load so we don't wait for the first interval. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/claude-usage-refresh.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/claude-usage-refresh.err</string>
+
+    <!-- Needed so `security` / Keychain access finds the user's login keychain.
+         CLAUDE_USAGE_VERBOSE removed: in steady state we don't need a log line on
+         every successful refresh — failures still write to StandardErrorPath. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>REPLACE_WITH_YOUR_HOME</string>
+    </dict>
+</dict>
+</plist>

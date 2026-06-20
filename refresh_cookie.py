@@ -5,27 +5,33 @@ Reads cookies directly from the Chromium-family browser you actually use, decryp
 them with the browser's Safe Storage key (fetched from macOS Keychain), and writes
 a fresh COOKIE= line into the widget config.
 
-Auto-detects which browser has the freshest cookie DB across Chrome (all profiles),
-Arc, Brave, and Chromium. No Chrome-quitting required — pycookiecheat copies the DB.
+Validates each candidate against the live API before persisting, so an expired
+session in (say) Chrome can't drown out a valid session in Arc. Writes atomically
+under a file lock to coexist with the SwiftBar plugin's concurrent reads.
 
-Runs silently on success; exits non-zero with stderr on failure.
-Designed for launchd / cron.
+Runs silently on success; non-zero exit with stderr on failure. Designed for launchd.
 """
 from __future__ import annotations
 
+import fcntl
+import json
+import os
+import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from pycookiecheat import chrome_cookies
 
 CONFIG_PATH = Path.home() / ".claude-usage-widget.conf"
+LOCK_PATH = Path.home() / ".claude-usage-widget.conf.lock"
 NEEDED = ["sessionKey", "lastActiveOrg", "anthropic-device-id", "cf_clearance", "__cf_bm"]
 REQUIRED = ["sessionKey", "cf_clearance"]
-
 HOME = Path.home()
+KEYCHAIN_TIMEOUT_SECONDS = 5
+API_VALIDATION_TIMEOUT_SECONDS = 10
 
-# (label, keychain_service_name, glob of cookie DB paths to probe)
 BROWSERS = [
     ("Arc",      "Arc Safe Storage",      [HOME / "Library/Application Support/Arc/User Data/Default/Cookies",
                                            *sorted((HOME / "Library/Application Support/Arc/User Data").glob("Profile */Cookies"))]),
@@ -38,18 +44,23 @@ BROWSERS = [
 
 
 def keychain_password(service: str) -> str | None:
+    """Return Safe Storage password from the login keychain, or None on miss/timeout."""
     try:
         return subprocess.check_output(
             ["security", "find-generic-password", "-w", "-s", service],
             stderr=subprocess.DEVNULL,
+            timeout=KEYCHAIN_TIMEOUT_SECONDS,
         ).decode().strip()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
 
 
-def candidates():
-    """Yield (label, profile_path, cookie_file, mtime) for every existing cookie DB,
-    newest first."""
+def candidates() -> list[tuple[str, str, Path, float]]:
+    """Every existing cookie DB across known browsers, newest mtime first.
+
+    mtime ordering is only a tie-breaker — the caller validates each cookie
+    against the live API before accepting it.
+    """
     found = []
     for label, service, paths in BROWSERS:
         for p in paths:
@@ -59,7 +70,8 @@ def candidates():
     return found
 
 
-def try_extract(label, service, cookie_file):
+def try_extract(service: str, cookie_file: Path):
+    """Return (cookies_dict, None) on success or (None, reason_str) on failure."""
     pw = keychain_password(service)
     if not pw:
         return None, f"no keychain entry for {service!r}"
@@ -71,9 +83,68 @@ def try_extract(label, service, cookie_file):
         )
     except Exception as e:
         return None, f"decrypt failed: {e}"
-    if not any(k in cookies for k in REQUIRED):
-        return None, "decrypted but no Claude cookies present"
+    if not all(k in cookies for k in REQUIRED):
+        missing = [k for k in REQUIRED if k not in cookies]
+        return None, f"missing required: {missing}"
     return cookies, None
+
+
+def read_usage_url() -> str | None:
+    if not CONFIG_PATH.exists():
+        return None
+    for line in CONFIG_PATH.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("USAGE_URL="):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return None
+
+
+def validate_cookies(cookies: dict, usage_url: str) -> tuple[bool, str]:
+    """Hit the API with these cookies. Accept only on 200 + JSON + no account_session_invalid.
+
+    Returns (ok, reason). curl_cffi is imported lazily so the rest of the module
+    is usable even if curl_cffi takes a while to load on cold start.
+    """
+    try:
+        from curl_cffi import requests
+    except Exception as e:
+        return False, f"curl_cffi import failed: {e}"
+
+    cookie_dict = {k: cookies[k] for k in NEEDED if k in cookies}
+    headers = {
+        "accept": "*/*",
+        "anthropic-client-platform": "web_claude_ai",
+        "content-type": "application/json",
+        "referer": "https://claude.ai/settings/usage",
+    }
+    try:
+        resp = requests.get(
+            usage_url,
+            headers=headers,
+            cookies=cookie_dict,
+            impersonate="chrome",
+            timeout=API_VALIDATION_TIMEOUT_SECONDS,
+        )
+    except Exception as e:
+        return False, f"http error: {e}"
+
+    if resp.status_code != 200:
+        snippet = (resp.text or "")[:200].replace("\n", " ")
+        return False, f"http {resp.status_code}: {snippet}"
+
+    try:
+        body = json.loads(resp.text)
+    except Exception as e:
+        snippet = (resp.text or "")[:200].replace("\n", " ")
+        return False, f"non-json response: {e} :: {snippet}"
+
+    body_str = json.dumps(body)
+    if "account_session_invalid" in body_str:
+        return False, "account_session_invalid"
+    if isinstance(body, dict) and body.get("type") == "error":
+        return False, f"api error: {body.get('error', {})}"
+
+    return True, "ok"
 
 
 def refresh():
@@ -82,46 +153,81 @@ def refresh():
         sys.stderr.write("No Chromium-family cookie DB found (Chrome/Arc/Brave/Chromium).\n")
         sys.exit(2)
 
-    last_err = None
-    for label, service, cookie_file, _mtime in cands:
-        cookies, err = try_extract(label, service, cookie_file)
-        if cookies is None:
-            last_err = f"[{label}:{cookie_file.parent.name}] {err}"
-            continue
-        if all(k in cookies for k in REQUIRED):
-            picked = {k: cookies[k] for k in NEEDED if k in cookies}
-            write_config(picked, source=f"{label}/{cookie_file.parent.name}")
-            return label, cookie_file, picked
-        last_err = f"[{label}:{cookie_file.parent.name}] missing required: {[k for k in REQUIRED if k not in cookies]}"
+    usage_url = read_usage_url()
+    if not usage_url:
+        sys.stderr.write(f"No USAGE_URL in {CONFIG_PATH}\n")
+        sys.exit(2)
 
-    sys.stderr.write(f"No browser had complete Claude cookies. Last error: {last_err}\n")
-    sys.stderr.write("Open claude.ai/settings/usage in your browser (logged in), then retry.\n")
+    attempts: list[str] = []
+    for label, service, cookie_file, _mtime in cands:
+        tag = f"{label}/{cookie_file.parent.name}"
+        cookies, err = try_extract(service, cookie_file)
+        if cookies is None:
+            attempts.append(f"  [{tag}] skipped: {err}")
+            continue
+        ok, reason = validate_cookies(cookies, usage_url)
+        if not ok:
+            attempts.append(f"  [{tag}] rejected: {reason}")
+            continue
+
+        picked = {k: cookies[k] for k in NEEDED if k in cookies}
+        write_config(picked)
+        return label, cookie_file, picked
+
+    sys.stderr.write("No valid Claude session found across browsers. Tried:\n")
+    for line in attempts:
+        sys.stderr.write(line + "\n")
+    sys.stderr.write("\nFix: open claude.ai in a logged-in browser, then retry.\n")
     sys.exit(2)
 
 
-def write_config(cookies_dict, source):
+def write_config(cookies_dict: dict) -> None:
+    """Atomically rewrite the config's COOKIE= line.
+
+    Holds an exclusive flock on a sidecar so concurrent SwiftBar plugin reads
+    and other refresher runs never see a half-written file. Writes to a temp
+    file in the same directory then os.replace() onto CONFIG_PATH.
+    """
     cookie_str = "; ".join(f"{k}={v}" for k, v in cookies_dict.items())
     if not CONFIG_PATH.exists():
         sys.stderr.write(f"Config not found: {CONFIG_PATH}\n")
         sys.exit(2)
 
-    lines = CONFIG_PATH.read_text().splitlines()
-    new_lines, replaced = [], False
-    for line in lines:
-        if line.strip().startswith("COOKIE="):
-            new_lines.append(f"COOKIE={cookie_str}")
-            replaced = True
-        else:
-            new_lines.append(line)
-    if not replaced:
-        new_lines.append(f"COOKIE={cookie_str}")
+    # Acquire exclusive lock; close in finally so the lock fd never leaks
+    lock_fd = os.open(str(LOCK_PATH), os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
 
-    CONFIG_PATH.write_text("\n".join(new_lines) + "\n")
-    CONFIG_PATH.chmod(0o600)
+        lines = CONFIG_PATH.read_text().splitlines()
+        new_lines, replaced = [], False
+        for line in lines:
+            if line.strip().startswith("COOKIE="):
+                new_lines.append(f"COOKIE={cookie_str}")
+                replaced = True
+            else:
+                new_lines.append(line)
+        if not replaced:
+            new_lines.append(f"COOKIE={cookie_str}")
+        new_content = "\n".join(new_lines) + "\n"
+
+        # Same-directory temp file so os.replace is atomic on the same volume
+        dir_ = CONFIG_PATH.parent
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=str(dir_), prefix=".claude-usage-widget.", suffix=".tmp",
+            delete=False, encoding="utf-8",
+        ) as tmp:
+            tmp.write(new_content)
+            tmp_path = Path(tmp.name)
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, CONFIG_PATH)
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(lock_fd)
 
 
 if __name__ == "__main__":
-    import os
     try:
         label, cookie_file, picked = refresh()
         if os.environ.get("CLAUDE_USAGE_VERBOSE"):
