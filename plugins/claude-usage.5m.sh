@@ -16,6 +16,8 @@ FETCHER="$WIDGET_DIR/fetch_usage.py"
 REFRESHER="$WIDGET_DIR/refresh_cookie.py"
 CC_USAGE="$WIDGET_DIR/claude_code_usage.py"
 CC_SUMMARY="$HOME/.claude-usage-cc-summary.json"
+CODEX_USAGE="$WIDGET_DIR/codex_usage.py"
+CODEX_SUMMARY="$HOME/.claude-usage-codex-summary.json"
 CONFIG="$HOME/.claude-usage-widget.conf"
 RAW="/tmp/claude-usage-raw.json"
 ERR_LOG="/tmp/claude-usage-err.log"
@@ -492,6 +494,28 @@ if [ -n "$CC_JSON" ] && echo "$CC_JSON" | jq -e . >/dev/null 2>&1; then
   echo "Today · $(humanize_tokens "$CC_TODAY_TOK") tokens · ≈$(humanize_usd "$CC_TODAY_USD") value | size=12"
   echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11 color=#8E8E93"
   echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11 color=#8E8E93"
+  echo "---"
+fi
+
+# --- Codex (local token usage) -----------------------------------------------
+# Read straight from ~/.codex/state_5.sqlite (read-only). Flat-rate ChatGPT
+# account, so token volume is the honest metric — no per-token bill.
+CODEX_JSON=$(/usr/bin/timeout 3 "$PYTHON" "$CODEX_USAGE" 2>/dev/null)
+if [ -z "$CODEX_JSON" ] && [ -f "$CODEX_SUMMARY" ]; then
+  CODEX_JSON=$(cat "$CODEX_SUMMARY")
+fi
+
+if [ -n "$CODEX_JSON" ] && echo "$CODEX_JSON" | jq -e '.available == true' >/dev/null 2>&1; then
+  CX_TODAY_TOK=$(echo "$CODEX_JSON" | jq -r '.today.tokens // 0')
+  CX_TODAY_THR=$(echo "$CODEX_JSON" | jq -r '.today.threads // 0')
+  CX_WEEK_TOK=$(echo "$CODEX_JSON"  | jq -r '.week.tokens // 0')
+  CX_MONTH_TOK=$(echo "$CODEX_JSON" | jq -r '.month.tokens // 0')
+  CX_ALL_TOK=$(echo "$CODEX_JSON"   | jq -r '.all_time.tokens // 0')
+
+  CX_THR_LABEL="threads"; [ "$CX_TODAY_THR" = "1" ] && CX_THR_LABEL="thread"
+  echo "CODEX · local, this machine | size=11 color=#8E8E93"
+  echo "Today · $(humanize_tokens "$CX_TODAY_TOK") tokens · ${CX_TODAY_THR} ${CX_THR_LABEL} | size=12"
+  echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11 color=#8E8E93"
   echo "---"
 fi
 
