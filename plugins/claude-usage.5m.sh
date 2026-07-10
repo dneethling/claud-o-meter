@@ -71,6 +71,28 @@ progress_bar() {
 
 round() { [ -n "$1" ] && printf "%.0f" "$1" || echo ""; }
 
+# Format a money amount (in minor units, e.g. cents) into a display string.
+# Args: $1=amount_minor  $2=currency_code  $3=exponent (decimal places)
+# Returns: e.g. "$6.54", "£12.30", "654 ABC" for unknown currencies.
+# Echoes "—" if the amount is empty or "null".
+format_money() {
+  local amt="$1" cur="$2" exp="$3"
+  if [ -z "$amt" ] || [ "$amt" = "null" ]; then echo "—"; return; fi
+  local divisor=1 i=0
+  while [ "$i" -lt "${exp:-0}" ]; do divisor=$(( divisor * 10 )); i=$(( i + 1 )); done
+  # bash has no float math; awk does the division + formatting
+  local val fmt="%.${exp:-0}f"
+  val=$(awk -v a="$amt" -v d="$divisor" -v f="$fmt" 'BEGIN { printf f, a/d }')
+  case "$cur" in
+    USD) echo "\$$val" ;;
+    GBP) echo "£$val" ;;
+    EUR) echo "€$val" ;;
+    ZAR) echo "R$val" ;;
+    JPY) echo "¥$val" ;;
+    *)   echo "$val $cur" ;;
+  esac
+}
+
 # Print one metric block: a single info line + a bar line, consistent sizing.
 # Args: $1=label  $2=pct(raw)  $3=reset-text
 print_metric() {
@@ -235,8 +257,31 @@ OPUS_RESET=$(echo "$RESP" | jq -r '.seven_day_opus.resets_at // empty')
 EXTRA_ENABLED=$(echo "$RESP" | jq -r '.extra_usage.is_enabled // "false"')
 EXTRA_UTIL=$(echo "$RESP" | jq -r '.extra_usage.utilization // empty')
 
+# Usage credits / spend block (paid overage when weekly is exhausted).
+# Use .spend.* as the canonical source; it's richer than .extra_usage.
+SPEND_ENABLED=$(echo "$RESP" | jq -r '.spend.enabled // false')
+SPEND_USED=$(echo "$RESP"     | jq -r '.spend.used.amount_minor // empty')
+SPEND_LIMIT=$(echo "$RESP"    | jq -r '.spend.limit.amount_minor // empty')
+SPEND_CURRENCY=$(echo "$RESP" | jq -r '.spend.used.currency // empty')
+SPEND_EXPONENT=$(echo "$RESP" | jq -r '.spend.used.exponent // 2')
+SPEND_PCT=$(echo "$RESP"      | jq -r '.spend.percent // empty')
+
 S_I=$(round "$SESSION")
 W_I=$(round "$WEEK")
+SPEND_I=$(round "$SPEND_PCT")
+
+# "On credits" when weekly is exhausted AND credit spending is active.
+# This is the trigger to switch the menu-bar headline from "%w" to "$X.XX".
+ON_CREDITS=0
+if [[ "$W_I" =~ ^[0-9]+$ ]] && [ "$W_I" -ge 100 ] \
+   && [ "$SPEND_ENABLED" = "true" ] \
+   && [ -n "$SPEND_USED" ] && [ "$SPEND_USED" != "null" ]; then
+  ON_CREDITS=1
+fi
+
+# Pre-format the spend amounts for reuse below
+SPEND_USED_STR=$(format_money "$SPEND_USED" "$SPEND_CURRENCY" "$SPEND_EXPONENT")
+SPEND_LIMIT_STR=$(format_money "$SPEND_LIMIT" "$SPEND_CURRENCY" "$SPEND_EXPONENT")
 
 # Detect API-shape change: 200 + JSON but our keys are gone.
 SHAPE_BROKEN=0
@@ -271,11 +316,36 @@ if mkdir "$ALERT_LOCK_DIR" 2>/dev/null; then
   fi
 
   if [[ "$W_I" =~ ^[0-9]+$ ]]; then
-    if [ "$W_I" -ge "$CRIT_PCT" ]; then
+    if [ "$W_I" -ge 100 ]; then
+      # Single one-time notice when the weekly limit actually hits 100%.
+      # Distinct key from `weekly_crit` so users still get the 85% heads-up.
+      if [ $ON_CREDITS -eq 1 ]; then
+        notify "Claude Usage" "Weekly limit hit — now on usage credits (${SPEND_USED_STR} of ${SPEND_LIMIT_STR})" "weekly_hit_100"
+      else
+        notify "Claude Usage" "Weekly limit hit — credits disabled, you may be blocked" "weekly_hit_100"
+      fi
+    elif [ "$W_I" -ge "$CRIT_PCT" ]; then
       notify "Claude Usage" "Weekly at ${W_I}% — limit approaching, resets ${WEEK_RESET_TXT}" "weekly_crit"
+      clear_alert "weekly_hit_100"
     else
       clear_alert "weekly_crit"
+      clear_alert "weekly_hit_100"
     fi
+  fi
+
+  # Usage credit alerts — only fire when we're actually on credits.
+  if [ $ON_CREDITS -eq 1 ] && [[ "$SPEND_I" =~ ^[0-9]+$ ]]; then
+    if [ "$SPEND_I" -ge "$CRIT_PCT" ]; then
+      notify "Claude Usage" "Credits at ${SPEND_I}% (${SPEND_USED_STR} of ${SPEND_LIMIT_STR}) — top up or wait for reset" "credits_crit"
+    elif [ "$SPEND_I" -ge "$WARN_PCT" ]; then
+      notify "Claude Usage" "Credits at ${SPEND_I}% — approaching monthly cap" "credits_warn"
+    else
+      clear_alert "credits_crit"
+      clear_alert "credits_warn"
+    fi
+  else
+    clear_alert "credits_crit"
+    clear_alert "credits_warn"
   fi
 fi
 # If mkdir failed another run is in the alerts section — skip alerts this tick.
@@ -298,19 +368,27 @@ if [ $SHAPE_BROKEN -eq 1 ]; then
   exit 0
 fi
 
-# Choose SF symbol based on session level
-if [[ "$S_I" =~ ^[0-9]+$ ]] && [ "$S_I" -ge "$CRIT_PCT" ]; then
-  ICON="sfimage=bolt.trianglebadge.exclamationmark"
-elif [[ "$S_I" =~ ^[0-9]+$ ]] && [ "$S_I" -ge "$WARN_PCT" ]; then
-  ICON="sfimage=gauge.with.dots.needle.67percent"
+# Menu bar icon + title
+# When the weekly limit is exhausted and credits are paying for usage,
+# switch the headline from "%w" to the actual credit spend "$X.XX".
+if [ $ON_CREDITS -eq 1 ]; then
+  ICON="sfimage=creditcard.fill"
+  # Title colour reflects credit-pool fill, not session — credits are the active scarcity now
+  TITLE_COLOR=$(color_for_pct "$SPEND_I")
+  TITLE="${S_I:-?}% · ${SPEND_USED_STR}"
 else
-  ICON="sfimage=gauge.with.dots.needle.33percent"
-fi
-
-TITLE_COLOR=$(color_for_pct "$S_I")
-TITLE="${S_I:-?}%"
-if [[ "$W_I" =~ ^[0-9]+$ ]]; then
-  TITLE="$TITLE · ${W_I}%w"
+  if [[ "$S_I" =~ ^[0-9]+$ ]] && [ "$S_I" -ge "$CRIT_PCT" ]; then
+    ICON="sfimage=bolt.trianglebadge.exclamationmark"
+  elif [[ "$S_I" =~ ^[0-9]+$ ]] && [ "$S_I" -ge "$WARN_PCT" ]; then
+    ICON="sfimage=gauge.with.dots.needle.67percent"
+  else
+    ICON="sfimage=gauge.with.dots.needle.33percent"
+  fi
+  TITLE_COLOR=$(color_for_pct "$S_I")
+  TITLE="${S_I:-?}%"
+  if [[ "$W_I" =~ ^[0-9]+$ ]]; then
+    TITLE="$TITLE · ${W_I}%w"
+  fi
 fi
 echo "$TITLE | $ICON color=$TITLE_COLOR size=12"
 
@@ -319,14 +397,32 @@ echo "---"
 echo "Claude Usage Dashboard | href=https://claude.ai/settings/usage size=14"
 echo "---"
 
+# Credits block: only when actually on credits — shown FIRST since it's what
+# the user is actively burning down right now.
+if [ $ON_CREDITS -eq 1 ]; then
+  SPEND_CLR=$(color_for_pct "$SPEND_I")
+  SPEND_BAR=$(progress_bar "$SPEND_I")
+  echo "On usage credits · ${SPEND_USED_STR} of ${SPEND_LIMIT_STR} (${SPEND_I}%) | size=12 color=$SPEND_CLR"
+  echo "$SPEND_BAR | font=Menlo size=12 color=$SPEND_CLR"
+  echo "  Weekly limit reached — Claude is billing against your credit pool until ${WEEK_RESET_TXT:-reset}. | size=11 color=#8E8E93"
+  echo "---"
+fi
+
 if [ -n "$SESSION" ]; then
   print_metric "Session · 5h" "$SESSION" "$SESSION_RESET_TXT"
   echo "---"
 fi
 
 if [ -n "$WEEK" ]; then
-  print_metric "Weekly · all models" "$WEEK" "$WEEK_RESET_TXT"
-  echo "---"
+  if [ $ON_CREDITS -eq 1 ]; then
+    # Weekly is exhausted — render it as 100% red with an "exhausted" tag instead of a generic bar.
+    echo "Weekly · all models · 100% · exhausted, resets ${WEEK_RESET_TXT:-?} | size=12 color=#FF3B30"
+    echo "$(progress_bar 100) | font=Menlo size=12 color=#FF3B30"
+    echo "---"
+  else
+    print_metric "Weekly · all models" "$WEEK" "$WEEK_RESET_TXT"
+    echo "---"
+  fi
 fi
 
 if [ -n "$SONNET" ]; then
@@ -339,11 +435,14 @@ if [ -n "$OPUS" ]; then
   echo "---"
 fi
 
-if [ "$EXTRA_ENABLED" = "true" ]; then
-  if [ -n "$EXTRA_UTIL" ]; then
-    print_metric "Extra usage" "$EXTRA_UTIL" ""
+# Extra usage block — only show when credits are enabled but NOT actively in use,
+# so we don't render the credit pool twice (the top "On usage credits" block
+# already covers the active case).
+if [ "$EXTRA_ENABLED" = "true" ] && [ $ON_CREDITS -eq 0 ]; then
+  if [ -n "$SPEND_USED" ] && [ "$SPEND_USED" != "null" ] && [ -n "$SPEND_LIMIT" ]; then
+    echo "Credits available · ${SPEND_USED_STR} of ${SPEND_LIMIT_STR} used this month | size=12"
   else
-    echo "Extra usage · enabled (none used) | size=12"
+    echo "Credits enabled · ready when weekly limit hits | size=12"
   fi
   echo "---"
 fi
