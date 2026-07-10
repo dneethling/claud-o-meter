@@ -14,6 +14,8 @@ WIDGET_DIR="/Users/darrenneethling/Downloads/claude-usage-widget"
 PYTHON="$WIDGET_DIR/.venv/bin/python"
 FETCHER="$WIDGET_DIR/fetch_usage.py"
 REFRESHER="$WIDGET_DIR/refresh_cookie.py"
+CC_USAGE="$WIDGET_DIR/claude_code_usage.py"
+CC_SUMMARY="$HOME/.claude-usage-cc-summary.json"
 CONFIG="$HOME/.claude-usage-widget.conf"
 RAW="/tmp/claude-usage-raw.json"
 ERR_LOG="/tmp/claude-usage-err.log"
@@ -70,6 +72,28 @@ progress_bar() {
 }
 
 round() { [ -n "$1" ] && printf "%.0f" "$1" || echo ""; }
+
+# Humanise a raw token count: 532362776 -> "532M", 4030338896 -> "4.0B".
+humanize_tokens() {
+  local n="$1"
+  [ -z "$n" ] || [ "$n" = "null" ] && { echo "—"; return; }
+  awk -v n="$n" 'BEGIN {
+    if (n >= 1e9)      printf "%.1fB", n/1e9;
+    else if (n >= 1e6) printf "%.0fM", n/1e6;
+    else if (n >= 1e3) printf "%.0fk", n/1e3;
+    else               printf "%d", n;
+  }'
+}
+
+# Humanise a USD amount into a compact "value" string: 1551 -> "$1.6k", 52 -> "$52".
+humanize_usd() {
+  local n="$1"
+  [ -z "$n" ] || [ "$n" = "null" ] && { echo "—"; return; }
+  awk -v n="$n" 'BEGIN {
+    if (n >= 1000) printf "$%.1fk", n/1000;
+    else           printf "$%.0f", n;
+  }'
+}
 
 # Format a money amount (in minor units, e.g. cents) into a display string.
 # Args: $1=amount_minor  $2=currency_code  $3=exponent (decimal places)
@@ -444,6 +468,30 @@ if [ "$EXTRA_ENABLED" = "true" ] && [ $ON_CREDITS -eq 0 ]; then
   else
     echo "Credits enabled · ready when weekly limit hits | size=12"
   fi
+  echo "---"
+fi
+
+# --- Claude Code (local token usage) -----------------------------------------
+# Read straight from ~/.claude logs — 100% local, no cookies, never expires.
+# Call the parser with a short timeout; on timeout fall back to the warm summary
+# file so a cold cache never freezes the menu (parser keeps that file updated).
+CC_JSON=$(/usr/bin/timeout 4 "$PYTHON" "$CC_USAGE" 2>/dev/null)
+if [ -z "$CC_JSON" ] && [ -f "$CC_SUMMARY" ]; then
+  CC_JSON=$(cat "$CC_SUMMARY")
+fi
+
+if [ -n "$CC_JSON" ] && echo "$CC_JSON" | jq -e . >/dev/null 2>&1; then
+  CC_TODAY_TOK=$(echo "$CC_JSON" | jq -r '.today.total_tokens // 0')
+  CC_TODAY_USD=$(echo "$CC_JSON" | jq -r '.today.est_cost_usd // 0')
+  CC_WEEK_TOK=$(echo "$CC_JSON"  | jq -r '.week.total_tokens // 0')
+  CC_WEEK_USD=$(echo "$CC_JSON"  | jq -r '.week.est_cost_usd // 0')
+  CC_MONTH_TOK=$(echo "$CC_JSON" | jq -r '.month.total_tokens // 0')
+  CC_MONTH_USD=$(echo "$CC_JSON" | jq -r '.month.est_cost_usd // 0')
+
+  echo "CLAUDE CODE · local, this machine | size=11 color=#8E8E93"
+  echo "Today · $(humanize_tokens "$CC_TODAY_TOK") tokens · ≈$(humanize_usd "$CC_TODAY_USD") value | size=12"
+  echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11 color=#8E8E93"
+  echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11 color=#8E8E93"
   echo "---"
 fi
 
