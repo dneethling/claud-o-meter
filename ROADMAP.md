@@ -1,26 +1,26 @@
-# Claude/Codex Usage Widget — Multi-Provider Roadmap & Implementation Plan
+# Claude/Codex Usage Widget - Multi-Provider Roadmap & Implementation Plan
 
-> **For agentic workers:** This is a self-contained plan. You have **zero prior context** and that is fine — everything you need is in this file. Execute phases **top to bottom**, one task at a time. Every task ends with a test and a commit. Do **not** skip the "Verify" steps. If a verify step fails, stop and fix before moving on. Steps use checkbox (`- [ ]`) syntax so you can track progress.
+> **For agentic workers:** This is a self-contained plan. You have **zero prior context** and that is fine - everything you need is in this file. Execute phases **top to bottom**, one task at a time. Every task ends with a test and a commit. Do **not** skip the "Verify" steps. If a verify step fails, stop and fix before moving on. Steps use checkbox (`- [ ]`) syntax so you can track progress.
 
 **Goal:** Extend a working macOS SwiftBar menu-bar widget (currently shows Claude + Codex usage) with five upgrades: a small provider-contract foundation, usage-trend sparklines, a status/incident badge, a configurable menu-bar glance, and Codex web rate-limits.
 
 **Architecture:** A single bash SwiftBar plugin renders the menu bar and dropdown. It shells out to small single-purpose Python scripts (one per data source) that each print JSON to stdout. Pure display/formatting helpers live in bash. Everything is local-first where possible; the only network calls are to Claude's internal usage API and (new, Phase 5) Codex's.
 
-**Tech Stack:** bash 3.2 (macOS system default — see House Rules), Python 3.14 in a venv at `.venv/`, `jq`, `curl_cffi` + `pycookiecheat` (already installed in the venv), SwiftBar.
+**Tech Stack:** bash 3.2 (macOS system default - see House Rules), Python 3.14 in a venv at `.venv/`, `jq`, `curl_cffi` + `pycookiecheat` (already installed in the venv), SwiftBar.
 
 ---
 
-## Part 1 — Orientation (READ THIS FIRST)
+## Part 1 - Orientation (READ THIS FIRST)
 
 ### 1.1 What this project is
 
 A menu-bar tool that shows how much of the user's AI coding quota is used, at a glance. It tracks three things today and will track more after this plan:
 
-- **Claude (web)** — session %, weekly %, per-model %, and paid "usage credits" when the weekly limit is hit. Data comes from `claude.ai`'s internal usage API using the user's browser session cookie.
-- **Claude Code (local)** — token volume parsed from `~/.claude/projects/**/*.jsonl` log files. No network, no auth.
-- **Codex (local)** — token volume from the `threads` table of `~/.codex/state_5.sqlite`. No network, no auth.
+- **Claude (web)** - session %, weekly %, per-model %, and paid "usage credits" when the weekly limit is hit. Data comes from `claude.ai`'s internal usage API using the user's browser session cookie.
+- **Claude Code (local)** - token volume parsed from `~/.claude/projects/**/*.jsonl` log files. No network, no auth.
+- **Codex (local)** - token volume from the `threads` table of `~/.codex/state_5.sqlite`. No network, no auth.
 
-The user is on **flat-rate plans** (Claude Max 5x, ChatGPT Plus). They do **not** pay per token. So token counts are the honest metric; any dollar figure is framed as "≈ API-equivalent value extracted", clearly labelled as an estimate — never as a bill.
+The user is on **flat-rate plans** (Claude Max 5x, ChatGPT Plus). They do **not** pay per token. So token counts are the honest metric; any dollar figure is framed as "≈ API-equivalent value extracted", clearly labelled as an estimate - never as a bill.
 
 ### 1.2 File inventory (current state)
 
@@ -70,7 +70,7 @@ Existing bash helper functions (all near the top, in the `# --- Helpers` block):
 
 | Function | Purpose |
 |---|---|
-| `color_for_pct <pct>` | Returns a hex colour: green `#34C759` (<60), orange `#FF9500` (60–84), red `#FF3B30` (85+). Never returns empty. |
+| `color_for_pct <pct>` | Returns a hex colour: green `#34C759` (<60), orange `#FF9500` (60-84), red `#FF3B30` (85+). Never returns empty. |
 | `progress_bar <pct>` | 14-char Unicode bar `█░`. |
 | `round <float>` | Rounds a float to an int string. |
 | `humanize_tokens <n>` | `532362776` → `532M`, `4030338896` → `4.0B`. Uses awk. |
@@ -102,10 +102,10 @@ open "swiftbar://refreshallplugins"
 
 SwiftBar output format (you MUST follow this): each line is `TEXT | key=value key=value`. The **first line** is the menu-bar title. `---` starts the dropdown and separates sections. Useful keys: `size=12`, `color=#RRGGBB`, `font=Menlo`, `sfimage=<SF Symbol name>`, `href=<url>`, `bash=<path> param1=... terminal=false`, `refresh=true`.
 
-### 1.5 House rules (NON-NEGOTIABLE — the user cares about these)
+### 1.5 House rules (NON-NEGOTIABLE - the user cares about these)
 
 1. **Never break the working widget.** It renders in <1s today. After every change, run `bash plugins/claude-usage.5m.sh` and confirm the Claude/Claude Code/Codex sections still appear. If a new feature errors, it must **degrade gracefully** (show nothing or a muted note), never blank the whole widget.
-2. **macOS bash 3.2 only.** The system bash is 3.2 (2007). **Do NOT use:** `mapfile`/`readarray`, `flock` (the binary — use `mkdir` as a mutex), `declare -A` associative arrays, `${var^^}` case modification. Use `while IFS= read -r` loops, `awk` for float maths, and `/usr/bin/timeout` (from coreutils; if absent, the code must still work — guard it).
+2. **macOS bash 3.2 only.** The system bash is 3.2 (2007). **Do NOT use:** `mapfile`/`readarray`, `flock` (the binary - use `mkdir` as a mutex), `declare -A` associative arrays, `${var^^}` case modification. Use `while IFS= read -r` loops, `awk` for float maths, and `/usr/bin/timeout` (from coreutils; if absent, the code must still work - guard it).
 3. **British spelling in all prose and comments** (colour, behaviour, initialise). Code identifiers that already exist (e.g. `color_for_pct`) stay as-is for consistency.
 4. **No em-dashes or en-dashes** in committed files. Use a comma, full stop, or " - " with spaces.
 5. **Verify before declaring done.** Run the actual command and read the actual output. Never assert a thing works from reasoning alone.
@@ -133,7 +133,7 @@ Every data source: prints ONE JSON object to stdout, writes nothing else there, 
 
 ---
 
-## Part 2 — Roadmap (phases, value, effort, order)
+## Part 2 - Roadmap (phases, value, effort, order)
 
 | Phase | Feature | Value | Effort | Needs the user? | Recommended order |
 |---|---|---|---|---|---|
@@ -149,9 +149,9 @@ Every data source: prints ONE JSON object to stdout, writes nothing else there, 
 
 ---
 
-## Part 3 — Detailed tasks
+## Part 3 - Detailed tasks
 
-### PHASE 1 — Foundation: shared lib, test harness, provider contract
+### PHASE 1 - Foundation: shared lib, test harness, provider contract
 
 **Why:** The plugin's pure helpers currently live inside the 530-line script, so they cannot be unit-tested. Extracting them into a sourced `lib/format.sh` gives every later phase a place to add tested helpers (the sparkline goes here in Phase 2). This is a safe refactor: the plugin sources the file, behaviour is unchanged, and we prove it with tests + a live render.
 
@@ -224,7 +224,7 @@ finish
 - [ ] **Step 1.3: Run the test to verify it fails**
 
 Run: `bash tests/test_format.sh`
-Expected: FAIL — `lib/format.sh` does not exist yet, so `source` errors and the asserts do not run. (You will see a "No such file or directory" for `lib/format.sh`.)
+Expected: FAIL - `lib/format.sh` does not exist yet, so `source` errors and the asserts do not run. (You will see a "No such file or directory" for `lib/format.sh`.)
 
 - [ ] **Step 1.4: Create `lib/format.sh` by extracting the existing helpers**
 
@@ -319,7 +319,7 @@ In `plugins/claude-usage.5m.sh`, immediately after the `# --- Thresholds for col
 source "$WIDGET_DIR/lib/format.sh"
 ```
 
-Then DELETE the now-duplicated function definitions from the plugin: `color_for_pct`, `progress_bar`, `round`, `humanize_tokens`, `humanize_usd`, `format_money` (they now live in `lib/format.sh`). Leave `print_metric`, `fmt_resets_all`, `notify`, `clear_alert` in the plugin — they have side effects or depend on plugin globals, so they stay.
+Then DELETE the now-duplicated function definitions from the plugin: `color_for_pct`, `progress_bar`, `round`, `humanize_tokens`, `humanize_usd`, `format_money` (they now live in `lib/format.sh`). Leave `print_metric`, `fmt_resets_all`, `notify`, `clear_alert` in the plugin - they have side effects or depend on plugin globals, so they stay.
 
 - [ ] **Step 1.7: Verify the live widget still renders identically**
 
@@ -387,7 +387,7 @@ git commit -m "$(printf 'refactor: extract pure helpers to lib/format.sh + add t
 
 ---
 
-### PHASE 2 — Usage-trend sparklines
+### PHASE 2 - Usage-trend sparklines
 
 **Why:** A percentage tells you where you are; a sparkline tells you how fast you are getting there. Each render appends a sample to a small rolling history file, then draws a `▁▂▃▅▇` sparkline of the session % over the last ~2 hours under the Session row.
 
@@ -542,7 +542,7 @@ git commit -m "$(printf 'feat: usage-trend sparkline under the Session row\n\nEa
 
 ---
 
-### PHASE 3 — Status/incident badge
+### PHASE 3 - Status/incident badge
 
 **Why:** When claude.ai or OpenAI has an incident, usage errors are not the user's fault. A small badge line and a dimmed icon tell them "it's them, not you". Both vendors expose a public Statuspage JSON API (no auth).
 
@@ -593,7 +593,7 @@ def test_unknown_on_garbage():
 - [ ] **Step 3.3: Run to verify failure**
 
 Run: `.venv/bin/pytest tests/test_status_check.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'status_check'`.
+Expected: FAIL - `ModuleNotFoundError: No module named 'status_check'`.
 
 - [ ] **Step 3.4: Implement `status_check.py`**
 
@@ -740,7 +740,7 @@ git commit -m "$(printf 'feat: status/incident badge from vendor status pages\n\
 
 ---
 
-### PHASE 4 — Menu-bar multi-provider glance (configurable)
+### PHASE 4 - Menu-bar multi-provider glance (configurable)
 
 **Why:** Today the menu-bar title shows only Claude web limits. Some users want Codex or Claude Code volume visible at a glance too. Add a single config knob with three modes, defaulting to today's behaviour so nothing changes unless the user opts in.
 
@@ -849,7 +849,7 @@ git commit -m "$(printf 'feat: configurable menu-bar multi-provider glance\n\nNe
 
 ---
 
-### PHASE 5 — Codex web rate-limits (REQUIRES a one-time capture from the user)
+### PHASE 5 - Codex web rate-limits (REQUIRES a one-time capture from the user)
 
 **Why:** The highest-value feature. Codex/ChatGPT enforces 5-hour and weekly message ceilings. Surfacing them turns the Codex section from a retrospective token count into a live "am I about to be throttled" gauge, matching what the Claude section already does.
 
@@ -1062,7 +1062,7 @@ git commit -m "$(printf 'feat: Codex web rate-limits (5h + weekly ceilings)\n\nc
 
 ---
 
-## Part 4 — Definition of done / final verification
+## Part 4 - Definition of done / final verification
 
 Run all of these from the repo root and confirm each:
 
@@ -1091,7 +1091,7 @@ Definition of done: Phases 1-4 complete and committed; Phase 5 complete if the u
 
 ---
 
-## Appendix — Quick reference for the executing agent
+## Appendix - Quick reference for the executing agent
 
 - **Repo root:** `~/Downloads/claude-usage-widget`
 - **Python:** `.venv/bin/python` (never system python; the venv has curl_cffi + pycookiecheat)
