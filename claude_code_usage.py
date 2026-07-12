@@ -149,11 +149,14 @@ def build_summary() -> dict:
     save_cache(cache)
 
     # Aggregate across every file's buckets into day/model totals
-    today = datetime.now().astimezone().strftime("%Y-%m-%d")
-    d7 = (datetime.now().astimezone() - timedelta(days=6)).strftime("%Y-%m-%d")
-    d30 = (datetime.now().astimezone() - timedelta(days=29)).strftime("%Y-%m-%d")
+    now = datetime.now().astimezone()
+    today = now.strftime("%Y-%m-%d")
+    d7 = (now - timedelta(days=6)).strftime("%Y-%m-%d")     # this-week start (7 days incl today)
+    d13 = (now - timedelta(days=13)).strftime("%Y-%m-%d")   # prev-week start
+    d30 = (now - timedelta(days=29)).strftime("%Y-%m-%d")
 
-    windows = {"today": {}, "week": {}, "month": {}}  # each: model -> {in,out,cr,cc}
+    windows = {"today": {}, "week": {}, "prev_week": {}, "month": {}}  # each: model -> {in,out,cr,cc}
+    daily_tokens: dict[str, int] = {}   # day -> total tokens, for the 7-day sparkline
 
     def add(win: dict, model: str, b: dict):
         t = win.setdefault(model, {"in": 0, "out": 0, "cr": 0, "cc": 0})
@@ -163,16 +166,30 @@ def build_summary() -> dict:
     for fentry in files.values():
         for key, b in fentry.get("buckets", {}).items():
             day, model = key.split("\x1f", 1)
+            day_total = b["in"] + b["out"] + b["cr"] + b["cc"]
+            if day >= d7:
+                daily_tokens[day] = daily_tokens.get(day, 0) + day_total
             if day == today:
                 add(windows["today"], model, b)
             if day >= d7:
                 add(windows["week"], model, b)
+            if d13 <= day < d7:
+                add(windows["prev_week"], model, b)
             if day >= d30:
                 add(windows["month"], model, b)
+
+    def short_model(m: str) -> str:
+        ml = m.lower()
+        if "opus" in ml: return "Opus"
+        if "sonnet" in ml: return "Sonnet"
+        if "haiku" in ml: return "Haiku"
+        if "fable" in ml: return "Fable"
+        return m
 
     def totals(win: dict) -> dict:
         tin = tout = tcr = tcc = 0
         cost = 0.0
+        by_model: dict[str, int] = {}
         for model, b in win.items():
             tin += b["in"]; tout += b["out"]; tcr += b["cr"]; tcc += b["cc"]
             p = price_for(model)
@@ -180,19 +197,30 @@ def build_summary() -> dict:
             cost += (b["out"] / 1e6) * p["out"]
             cost += (b["cc"] / 1e6) * p["cache_write"]
             cost += (b["cr"] / 1e6) * p["cache_read"]
+            sm = short_model(model)
+            by_model[sm] = by_model.get(sm, 0) + b["in"] + b["out"] + b["cr"] + b["cc"]
         total_tokens = tin + tout + tcr + tcc
         return {
             "input": tin, "output": tout,
             "cache_read": tcr, "cache_write": tcc,
             "total_tokens": total_tokens,
             "est_cost_usd": round(cost, 2),
+            "by_model": by_model,
         }
 
+    # Last 7 days as an ordered array oldest -> newest, for the sparkline
+    daily = []
+    for i in range(6, -1, -1):
+        d = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        daily.append(daily_tokens.get(d, 0))
+
     summary = {
-        "generated_at": datetime.now().astimezone().isoformat(),
+        "generated_at": now.isoformat(),
         "today": totals(windows["today"]),
         "week": totals(windows["week"]),
+        "prev_week": totals(windows["prev_week"]),
         "month": totals(windows["month"]),
+        "daily": daily,
     }
     return summary
 

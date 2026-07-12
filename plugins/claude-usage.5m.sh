@@ -27,7 +27,7 @@ REFRESH_ERR="/tmp/claude-usage-refresh.err"
 ALERT_STATE="/tmp/claude-usage-alert-state"
 ALERT_LOCK="/tmp/claude-usage-alert.lock"
 HISTORY_FILE="$HOME/.claude-usage-history"   # "epoch sessionPct weeklyPct" per render
-HISTORY_CAP=288                              # 24h at 5-min cadence
+HISTORY_CAP=2016                             # 7 days at 5-min cadence (for weekly prediction)
 LOG_MAX_BYTES=1048576    # 1 MB
 
 # --- Log rotation ------------------------------------------------------------

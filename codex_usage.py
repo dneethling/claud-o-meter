@@ -60,14 +60,17 @@ def build_summary() -> dict:
         return {"available": False, "reason": f"query failed: {e}"}
     con.close()
 
-    today = datetime.now().astimezone().strftime("%Y-%m-%d")
-    d7 = (datetime.now().astimezone() - timedelta(days=6)).strftime("%Y-%m-%d")
-    d30 = (datetime.now().astimezone() - timedelta(days=29)).strftime("%Y-%m-%d")
+    now = datetime.now().astimezone()
+    today = now.strftime("%Y-%m-%d")
+    d7 = (now - timedelta(days=6)).strftime("%Y-%m-%d")
+    d13 = (now - timedelta(days=13)).strftime("%Y-%m-%d")
+    d30 = (now - timedelta(days=29)).strftime("%Y-%m-%d")
 
     def blank():
         return {"tokens": 0, "threads": 0}
 
-    today_b, week_b, month_b, all_b = blank(), blank(), blank(), blank()
+    today_b, week_b, prev_week_b, month_b, all_b = blank(), blank(), blank(), blank(), blank()
+    daily_tokens: dict[str, int] = {}   # day -> tokens, for the 7-day sparkline
 
     for tokens_used, updated_at in rows:
         tokens_used = int(tokens_used or 0)
@@ -76,20 +79,31 @@ def build_summary() -> dict:
         all_b["threads"] += 1
         if not day:
             continue
+        if day >= d7:
+            daily_tokens[day] = daily_tokens.get(day, 0) + tokens_used
         if day == today:
             today_b["tokens"] += tokens_used; today_b["threads"] += 1
         if day >= d7:
             week_b["tokens"] += tokens_used; week_b["threads"] += 1
+        if d13 <= day < d7:
+            prev_week_b["tokens"] += tokens_used; prev_week_b["threads"] += 1
         if day >= d30:
             month_b["tokens"] += tokens_used; month_b["threads"] += 1
 
+    daily = []
+    for i in range(6, -1, -1):
+        d = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        daily.append(daily_tokens.get(d, 0))
+
     return {
         "available": True,
-        "generated_at": datetime.now().astimezone().isoformat(),
+        "generated_at": now.isoformat(),
         "today": today_b,
         "week": week_b,
+        "prev_week": prev_week_b,
         "month": month_b,
         "all_time": all_b,
+        "daily": daily,
     }
 
 
