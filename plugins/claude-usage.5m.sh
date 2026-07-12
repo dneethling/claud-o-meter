@@ -43,82 +43,13 @@ done
 WARN_PCT=60
 CRIT_PCT=85
 
+# Pure display/formatting helpers (color_for_pct, progress_bar, round,
+# humanize_tokens, humanize_usd, format_money, sparkline) live in lib/format.sh
+# so they can be unit-tested. WIDGET_DIR is defined at the top of this file.
+# shellcheck source=/dev/null
+source "$WIDGET_DIR/lib/format.sh"
+
 # --- Helpers -----------------------------------------------------------------
-color_for_pct() {
-  local pct="${1%%.*}"  # strip decimal
-  # NEVER return empty — an empty color= makes SwiftBar render black
-  # (invisible on the dark menu bar). Default to green.
-  [ -z "$pct" ] && { echo "#34C759"; return; }
-  if [ "$pct" -ge "$CRIT_PCT" ]; then
-    echo "#FF3B30"  # red
-  elif [ "$pct" -ge "$WARN_PCT" ]; then
-    echo "#FF9500"  # orange
-  else
-    echo "#34C759"  # green
-  fi
-}
-
-# Unicode progress bar: ████████░░ style
-progress_bar() {
-  local pct="${1%%.*}"
-  [ -z "$pct" ] && { echo ""; return; }
-  local width=14
-  local filled=$(( pct * width / 100 ))
-  [ $filled -gt $width ] && filled=$width
-  [ $filled -lt 0 ] && filled=0
-  local empty=$(( width - filled ))
-  local bar=""
-  for ((i=0; i<filled; i++)); do bar+="█"; done
-  for ((i=0; i<empty; i++)); do bar+="░"; done
-  echo "$bar"
-}
-
-round() { [ -n "$1" ] && printf "%.0f" "$1" || echo ""; }
-
-# Humanise a raw token count: 532362776 -> "532M", 4030338896 -> "4.0B".
-humanize_tokens() {
-  local n="$1"
-  [ -z "$n" ] || [ "$n" = "null" ] && { echo "—"; return; }
-  awk -v n="$n" 'BEGIN {
-    if (n >= 1e9)      printf "%.1fB", n/1e9;
-    else if (n >= 1e6) printf "%.0fM", n/1e6;
-    else if (n >= 1e3) printf "%.0fk", n/1e3;
-    else               printf "%d", n;
-  }'
-}
-
-# Humanise a USD amount into a compact "value" string: 1551 -> "$1.6k", 52 -> "$52".
-humanize_usd() {
-  local n="$1"
-  [ -z "$n" ] || [ "$n" = "null" ] && { echo "—"; return; }
-  awk -v n="$n" 'BEGIN {
-    if (n >= 1000) printf "$%.1fk", n/1000;
-    else           printf "$%.0f", n;
-  }'
-}
-
-# Format a money amount (in minor units, e.g. cents) into a display string.
-# Args: $1=amount_minor  $2=currency_code  $3=exponent (decimal places)
-# Returns: e.g. "$6.54", "£12.30", "654 ABC" for unknown currencies.
-# Echoes "—" if the amount is empty or "null".
-format_money() {
-  local amt="$1" cur="$2" exp="$3"
-  if [ -z "$amt" ] || [ "$amt" = "null" ]; then echo "—"; return; fi
-  local divisor=1 i=0
-  while [ "$i" -lt "${exp:-0}" ]; do divisor=$(( divisor * 10 )); i=$(( i + 1 )); done
-  # bash has no float math; awk does the division + formatting
-  local val fmt="%.${exp:-0}f"
-  val=$(awk -v a="$amt" -v d="$divisor" -v f="$fmt" 'BEGIN { printf f, a/d }')
-  case "$cur" in
-    USD) echo "\$$val" ;;
-    GBP) echo "£$val" ;;
-    EUR) echo "€$val" ;;
-    ZAR) echo "R$val" ;;
-    JPY) echo "¥$val" ;;
-    *)   echo "$val $cur" ;;
-  esac
-}
-
 # Print one metric block: a single info line + a bar line, consistent sizing.
 # Args: $1=label  $2=pct(raw)  $3=reset-text
 print_metric() {
