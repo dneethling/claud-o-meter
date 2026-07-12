@@ -65,6 +65,16 @@ The plugin also calls `refresh_cookie.py` itself whenever a fetch fails, so even
 
 Click the SwiftBar icon → Refresh. You should see something like `29% · 7%w` in green.
 
+### Menu-bar display modes
+
+By default the menu bar shows Claude limits only: `16% · 10%w`. To also surface
+local token volume, add one line to `~/.claude-usage-widget.conf`:
+
+    MENUBAR_MODE=codex   # adds Codex 30-day tokens:  16% · 10%w · cx 132M
+    MENUBAR_MODE=both    # adds Claude Code too:       16% · 10%w · cc 22.5B · cx 132M
+
+Remove the line (or set `claude`) for the default.
+
 ## What each menu-bar state means
 
 | Title shows | What it means | What to do |

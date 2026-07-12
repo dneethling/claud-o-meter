@@ -46,6 +46,13 @@ done
 WARN_PCT=60
 CRIT_PCT=85
 
+# Menu-bar title mode. Override by adding a MENUBAR_MODE=... line to the config.
+#   claude (default) -> "16% · 10%w"
+#   codex            -> "16% · 10%w · cx 120M"          (adds Codex 30-day tokens)
+#   both             -> "16% · 10%w · cc 20.5B · cx 120M" (adds Claude Code too)
+MENUBAR_MODE=$(grep -E '^MENUBAR_MODE=' "$CONFIG" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ')
+[ -z "$MENUBAR_MODE" ] && MENUBAR_MODE="claude"
+
 # Pure display/formatting helpers (color_for_pct, progress_bar, round,
 # humanize_tokens, humanize_usd, format_money, sparkline) live in lib/format.sh
 # so they can be unit-tested. WIDGET_DIR is defined at the top of this file.
@@ -377,6 +384,16 @@ else
   TITLE="${S_I:-?}%"
   if [[ "$W_I" =~ ^[0-9]+$ ]]; then
     TITLE="$TITLE · ${W_I}%w"
+  fi
+  # Optional multi-provider glance: append local token volume per MENUBAR_MODE.
+  # Read compact figures from the warm summary files (no ordering dependency).
+  if [ "$MENUBAR_MODE" = "both" ] && [ -f "$CC_SUMMARY" ]; then
+    CC_M=$(jq -r '.month.total_tokens // empty' "$CC_SUMMARY" 2>/dev/null)
+    [ -n "$CC_M" ] && TITLE="$TITLE · cc $(humanize_tokens "$CC_M")"
+  fi
+  if { [ "$MENUBAR_MODE" = "codex" ] || [ "$MENUBAR_MODE" = "both" ]; } && [ -f "$CODEX_SUMMARY" ]; then
+    CX_M=$(jq -r '.month.tokens // empty' "$CODEX_SUMMARY" 2>/dev/null)
+    [ -n "$CX_M" ] && TITLE="$TITLE · cx $(humanize_tokens "$CX_M")"
   fi
 fi
 
