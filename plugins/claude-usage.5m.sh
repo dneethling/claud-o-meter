@@ -18,6 +18,7 @@ CC_USAGE="$WIDGET_DIR/claude_code_usage.py"
 CC_SUMMARY="$HOME/.claude-usage-cc-summary.json"
 CODEX_USAGE="$WIDGET_DIR/codex_usage.py"
 CODEX_SUMMARY="$HOME/.claude-usage-codex-summary.json"
+STATUS_CHECK="$WIDGET_DIR/status_check.py"
 CONFIG="$HOME/.claude-usage-widget.conf"
 RAW="/tmp/claude-usage-raw.json"
 ERR_LOG="/tmp/claude-usage-err.log"
@@ -51,6 +52,25 @@ CRIT_PCT=85
 # shellcheck source=/dev/null
 source "$WIDGET_DIR/lib/format.sh"
 
+# Portable timeout: macOS ships no `timeout`/`gtimeout`. Runs a command and
+# kills it (SIGTERM) if it exceeds N seconds. Uses perl (always present on
+# macOS); exec preserves stdin/stdout/stderr, so heredoc-fed callers work.
+run_timeout() {
+  local secs="$1"; shift
+  perl -e '
+    my $t = shift;
+    my $pid = fork();
+    if (!defined $pid) { exit 127 }
+    if ($pid == 0) { exec @ARGV; exit 127 }
+    local $SIG{ALRM} = sub { kill "TERM", $pid; };
+    alarm $t;
+    waitpid($pid, 0);
+    my $rc = $? >> 8;
+    alarm 0;
+    exit $rc;
+  ' "$secs" "$@"
+}
+
 # --- Helpers -----------------------------------------------------------------
 # Print one metric block: a single info line + a bar line, consistent sizing.
 # Args: $1=label  $2=pct(raw)  $3=reset-text
@@ -74,7 +94,7 @@ print_metric() {
 # via argv (NOT string interpolation) so they can never break out of the Python source.
 # Stdout is one line per input (empty line for empty input).
 fmt_resets_all() {
-  /usr/bin/timeout 2 "$PYTHON" - "$@" <<'PY' 2>/dev/null
+  run_timeout 2 "$PYTHON" - "$@" <<'PY' 2>/dev/null
 import sys
 from datetime import datetime
 
@@ -359,12 +379,32 @@ else
     TITLE="$TITLE · ${W_I}%w"
   fi
 fi
+
+# Provider status: dim + badge the icon if a vendor reports an incident.
+# Applies to both credit and normal modes (this runs after the if/else).
+STATUS_JSON=$(run_timeout 7 "$PYTHON" "$STATUS_CHECK" 2>/dev/null)
+INCIDENT=""
+if [ -n "$STATUS_JSON" ]; then
+  A_ST=$(echo "$STATUS_JSON" | jq -r '.anthropic // "unknown"')
+  O_ST=$(echo "$STATUS_JSON" | jq -r '.openai // "unknown"')
+  [ "$A_ST" = "incident" ] && INCIDENT="Claude"
+  [ "$O_ST" = "incident" ] && INCIDENT="${INCIDENT:+$INCIDENT + }OpenAI"
+fi
+if [ -n "$INCIDENT" ]; then
+  ICON="sfimage=exclamationmark.triangle.fill"
+  TITLE_COLOR="#FF9500"
+fi
 echo "$TITLE | $ICON color=$TITLE_COLOR size=12"
 
 # --- Dropdown ----------------------------------------------------------------
 echo "---"
 echo "Claude Usage Dashboard | href=https://claude.ai/settings/usage size=14"
 echo "---"
+
+if [ -n "$INCIDENT" ]; then
+  echo "⚠ ${INCIDENT} reporting an incident | color=#FF9500 href=https://status.anthropic.com"
+  echo "---"
+fi
 
 # Credits block: only when actually on credits — shown FIRST since it's what
 # the user is actively burning down right now.
@@ -425,7 +465,7 @@ fi
 # Read straight from ~/.claude logs — 100% local, no cookies, never expires.
 # Call the parser with a short timeout; on timeout fall back to the warm summary
 # file so a cold cache never freezes the menu (parser keeps that file updated).
-CC_JSON=$(/usr/bin/timeout 4 "$PYTHON" "$CC_USAGE" 2>/dev/null)
+CC_JSON=$(run_timeout 4 "$PYTHON" "$CC_USAGE" 2>/dev/null)
 if [ -z "$CC_JSON" ] && [ -f "$CC_SUMMARY" ]; then
   CC_JSON=$(cat "$CC_SUMMARY")
 fi
@@ -448,7 +488,7 @@ fi
 # --- Codex (local token usage) -----------------------------------------------
 # Read straight from ~/.codex/state_5.sqlite (read-only). Flat-rate ChatGPT
 # account, so token volume is the honest metric — no per-token bill.
-CODEX_JSON=$(/usr/bin/timeout 3 "$PYTHON" "$CODEX_USAGE" 2>/dev/null)
+CODEX_JSON=$(run_timeout 3 "$PYTHON" "$CODEX_USAGE" 2>/dev/null)
 if [ -z "$CODEX_JSON" ] && [ -f "$CODEX_SUMMARY" ]; then
   CODEX_JSON=$(cat "$CODEX_SUMMARY")
 fi
