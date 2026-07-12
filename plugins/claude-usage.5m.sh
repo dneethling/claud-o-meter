@@ -25,6 +25,8 @@ REFRESH_LOG="/tmp/claude-usage-refresh.log"
 REFRESH_ERR="/tmp/claude-usage-refresh.err"
 ALERT_STATE="/tmp/claude-usage-alert-state"
 ALERT_LOCK="/tmp/claude-usage-alert.lock"
+HISTORY_FILE="$HOME/.claude-usage-history"   # "epoch sessionPct weeklyPct" per render
+HISTORY_CAP=288                              # 24h at 5-min cadence
 LOG_MAX_BYTES=1048576    # 1 MB
 
 # --- Log rotation ------------------------------------------------------------
@@ -246,6 +248,16 @@ if [ -z "$S_I" ] && [ -z "$W_I" ]; then
   SHAPE_BROKEN=1
 fi
 
+# Append a history sample and trim (used for the sparkline). Numeric-only so a
+# bad tick can never pollute the trend.
+if [[ "$S_I" =~ ^[0-9]+$ ]] && [[ "$W_I" =~ ^[0-9]+$ ]]; then
+  printf '%s %s %s\n' "$(date +%s)" "$S_I" "$W_I" >> "$HISTORY_FILE"
+  hlines=$(wc -l < "$HISTORY_FILE" 2>/dev/null | tr -d ' ')
+  if [ -n "$hlines" ] && [ "$hlines" -gt "$HISTORY_CAP" ]; then
+    tail -n "$HISTORY_CAP" "$HISTORY_FILE" > "$HISTORY_FILE.tmp" && mv -f "$HISTORY_FILE.tmp" "$HISTORY_FILE"
+  fi
+fi
+
 # Pre-compute all four reset strings in ONE Python invocation.
 # bash 3.2 (macOS default) has no `mapfile` — use a portable while-read.
 RESET_LINES=()
@@ -367,6 +379,11 @@ fi
 
 if [ -n "$SESSION" ]; then
   print_metric "Session · 5h" "$SESSION" "$SESSION_RESET_TXT"
+  if [ -f "$HISTORY_FILE" ]; then
+    SESSION_TREND=$(tail -n 24 "$HISTORY_FILE" 2>/dev/null | awk '{printf "%s ", $2}')
+    SPARK=$(sparkline "$SESSION_TREND")
+    [ -n "$SPARK" ] && echo "  trend (last ~2h) $SPARK | font=Menlo size=11 color=#8E8E93"
+  fi
   echo "---"
 fi
 
