@@ -430,7 +430,7 @@ if [ $ON_CREDITS -eq 1 ]; then
   SPEND_BAR=$(progress_bar "$SPEND_I")
   echo "On usage credits · ${SPEND_USED_STR} of ${SPEND_LIMIT_STR} (${SPEND_I}%) | size=12 color=$SPEND_CLR"
   echo "$SPEND_BAR | font=Menlo size=12 color=$SPEND_CLR"
-  echo "  Weekly limit reached — Claude is billing against your credit pool until ${WEEK_RESET_TXT:-reset}. | size=11 color=#8E8E93"
+  echo "  Weekly limit reached — Claude is billing against your credit pool until ${WEEK_RESET_TXT:-reset}. | size=11"
   echo "---"
 fi
 
@@ -439,7 +439,7 @@ if [ -n "$SESSION" ]; then
   if [ -f "$HISTORY_FILE" ]; then
     SESSION_TREND=$(tail -n 24 "$HISTORY_FILE" 2>/dev/null | awk '{printf "%s ", $2}')
     SPARK=$(sparkline "$SESSION_TREND")
-    [ -n "$SPARK" ] && echo "  trend (last ~2h) $SPARK | font=Menlo size=11 color=#8E8E93"
+    [ -n "$SPARK" ] && echo "  trend (last ~2h) $SPARK | font=Menlo size=13 color=$(color_for_pct "$S_I")"
   fi
   echo "---"
 fi
@@ -495,10 +495,10 @@ if [ -n "$CC_JSON" ] && echo "$CC_JSON" | jq -e . >/dev/null 2>&1; then
   CC_MONTH_TOK=$(echo "$CC_JSON" | jq -r '.month.total_tokens // 0')
   CC_MONTH_USD=$(echo "$CC_JSON" | jq -r '.month.est_cost_usd // 0')
 
-  echo "CLAUDE CODE · local, this machine | size=11 color=#8E8E93"
+  echo "CLAUDE CODE · local, this machine | size=11"
   echo "Today · $(humanize_tokens "$CC_TODAY_TOK") tokens · ≈$(humanize_usd "$CC_TODAY_USD") value | size=12"
-  echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11 color=#8E8E93"
-  echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11 color=#8E8E93"
+  echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11"
+  echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11"
   echo "---"
 fi
 
@@ -518,9 +518,9 @@ if [ -n "$CODEX_JSON" ] && echo "$CODEX_JSON" | jq -e '.available == true' >/dev
   CX_ALL_TOK=$(echo "$CODEX_JSON"   | jq -r '.all_time.tokens // 0')
 
   CX_THR_LABEL="threads"; [ "$CX_TODAY_THR" = "1" ] && CX_THR_LABEL="thread"
-  echo "CODEX · local, this machine | size=11 color=#8E8E93"
+  echo "CODEX · local, this machine | size=11"
   echo "Today · $(humanize_tokens "$CX_TODAY_TOK") tokens · ${CX_TODAY_THR} ${CX_THR_LABEL} | size=12"
-  echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11 color=#8E8E93"
+  echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11"
   echo "---"
 fi
 
