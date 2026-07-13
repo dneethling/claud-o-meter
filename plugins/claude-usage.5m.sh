@@ -52,6 +52,11 @@ done
 WARN_PCT=60
 CRIT_PCT=85
 
+# Readable label colour for informational (non-clickable) menu lines. SwiftBar
+# dims non-actionable items, and a bare adaptive colour does not override that,
+# so we force full contrast with a light,dark pair (near-black / near-white).
+LBL="#1c1c1e,#f2f2f7"
+
 # Menu-bar title mode. Override by adding a MENUBAR_MODE=... line to the config.
 #   claude (default) -> "16% · 10%w"
 #   codex            -> "16% · 10%w · cx 120M"          (adds Codex 30-day tokens)
@@ -104,7 +109,7 @@ print_metric() {
   [ -n "$reset" ] && info="$info · resets $reset"
   # No color= on the text line → SwiftBar uses the adaptive system label
   # color (white in dark mode, black in light mode). Always readable.
-  echo "$info | size=12"
+  echo "$info | size=12 color=$LBL"
   echo "$bar | font=Menlo size=12 $(colorkey "$clr")"
 }
 
@@ -472,7 +477,7 @@ if [ $ON_CREDITS -eq 1 ]; then
   SPEND_BAR=$(progress_bar "$SPEND_I")
   echo "On usage credits · ${SPEND_USED_STR} of ${SPEND_LIMIT_STR} (${SPEND_I}%) | size=12 $(colorkey "$SPEND_CLR")"
   echo "$SPEND_BAR | font=Menlo size=12 $(colorkey "$SPEND_CLR")"
-  echo "  Weekly limit reached — Claude is billing against your credit pool until ${WEEK_RESET_TXT:-reset}. | size=11"
+  echo "  Weekly limit reached — Claude is billing against your credit pool until ${WEEK_RESET_TXT:-reset}. | size=11 color=$LBL"
   echo "---"
 fi
 
@@ -520,9 +525,9 @@ fi
 # already covers the active case).
 if [ "$EXTRA_ENABLED" = "true" ] && [ $ON_CREDITS -eq 0 ]; then
   if [ -n "$SPEND_USED" ] && [ "$SPEND_USED" != "null" ] && [ -n "$SPEND_LIMIT" ]; then
-    echo "Credits available · ${SPEND_USED_STR} of ${SPEND_LIMIT_STR} used this month | size=12"
+    echo "Credits available · ${SPEND_USED_STR} of ${SPEND_LIMIT_STR} used this month | size=12 color=$LBL"
   else
-    echo "Credits enabled · ready when weekly limit hits | size=12"
+    echo "Credits enabled · ready when weekly limit hits | size=12 color=$LBL"
   fi
   echo "---"
 fi
@@ -567,16 +572,16 @@ EOF
   # 7-day daily token sparkline
   CC_SPARK=$(sparkline "$(echo "$CC_JSON" | jq -r '.daily | join(" ")' 2>/dev/null)")
 
-  echo "CLAUDE CODE · local, this machine | size=11"
-  echo "Today · $(humanize_tokens "$CC_TODAY_TOK") tokens · ≈$(humanize_usd "$CC_TODAY_USD") value | size=12"
-  [ -n "$CC_MODEL_PARTS" ] && echo "  by model · $CC_MODEL_PARTS | size=11"
+  echo "CLAUDE CODE · local, this machine | size=11 color=$LBL"
+  echo "Today · $(humanize_tokens "$CC_TODAY_TOK") tokens · ≈$(humanize_usd "$CC_TODAY_USD") value | size=12 color=$LBL"
+  [ -n "$CC_MODEL_PARTS" ] && echo "  by model · $CC_MODEL_PARTS | size=11 color=$LBL"
   if [ -n "$CC_WOW" ]; then
-    echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") ($CC_WOW vs prev) · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11"
+    echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") ($CC_WOW vs prev) · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11 color=$LBL"
   else
-    echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11"
+    echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11 color=$LBL"
   fi
-  [ -n "$CC_SPARK" ] && echo "  7-day trend $CC_SPARK | font=Menlo size=11"
-  echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11"
+  [ -n "$CC_SPARK" ] && echo "  7-day trend $CC_SPARK | font=Menlo size=11 color=$LBL"
+  echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11 color=$LBL"
   echo "---"
 fi
 
@@ -606,14 +611,14 @@ if [ -n "$CODEX_JSON" ] && echo "$CODEX_JSON" | jq -e '.available == true' >/dev
   CX_SPARK=$(sparkline "$(echo "$CODEX_JSON" | jq -r '.daily | join(" ")' 2>/dev/null)")
 
   CX_THR_LABEL="threads"; [ "$CX_TODAY_THR" = "1" ] && CX_THR_LABEL="thread"
-  echo "CODEX · local, this machine | size=11"
-  echo "Today · $(humanize_tokens "$CX_TODAY_TOK") tokens · ${CX_TODAY_THR} ${CX_THR_LABEL} | size=12"
+  echo "CODEX · local, this machine | size=11 color=$LBL"
+  echo "Today · $(humanize_tokens "$CX_TODAY_TOK") tokens · ${CX_TODAY_THR} ${CX_THR_LABEL} | size=12 color=$LBL"
   if [ -n "$CX_WOW" ]; then
-    echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") ($CX_WOW vs prev) · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11"
+    echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") ($CX_WOW vs prev) · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11 color=$LBL"
   else
-    echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11"
+    echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11 color=$LBL"
   fi
-  [ -n "$CX_SPARK" ] && echo "  7-day trend $CX_SPARK | font=Menlo size=11"
+  [ -n "$CX_SPARK" ] && echo "  7-day trend $CX_SPARK | font=Menlo size=11 color=$LBL"
   echo "---"
 fi
 
