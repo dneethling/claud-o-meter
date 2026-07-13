@@ -6,9 +6,11 @@ message.usage.{input_tokens,output_tokens,cache_creation_input_tokens,
 cache_read_input_tokens} and message.model, with a top-level ISO timestamp.
 
 We sum tokens by local calendar day and model, then report today / last 7 days /
-last 30 days. Token counts are EXACT (straight from the logs). The dollar figure
-is an "API-equivalent value" estimate — on a flat-rate Max plan you don't pay
-per token, so it's framed as value extracted, not money spent.
+last 30 days. Records are DE-DUPLICATED on (message.id, requestId) - the same key
+ccusage uses - because Claude Code writes the same assistant message into several
+files (resumed sessions, subagent sidechains); counting every line over-counts
+roughly 3x. The dollar figure is an "API-equivalent value" estimate - on a
+flat-rate Max plan you don't pay per token, so it's value extracted, not spent.
 
 Fast on repeat runs: an incremental cache keyed on (path, mtime, size) means only
 new or changed session files are re-parsed. Output goes to stdout as JSON and is
@@ -31,7 +33,7 @@ SUMMARY_PATH = HOME / ".claude-usage-cc-summary.json"
 # Only scan files touched within this many days — bounds the work and matches
 # the widest window we report (30 days) plus a margin.
 SCAN_WINDOW_DAYS = 35
-CACHE_VERSION = 3
+CACHE_VERSION = 4
 
 # API-equivalent pricing, USD per 1M tokens. These are ESTIMATES for the
 # "value from your subscription" figure only — edit to taste. Verify current
@@ -68,11 +70,20 @@ def local_date(ts: str) -> str | None:
 
 
 def parse_file(path: Path) -> dict:
-    """Return {'YYYY-MM-DD\x1fmodel': {in,out,cr,cc}} for one session file."""
-    buckets: dict[str, dict] = {}
+    """Return {dedup_key: [day, model, in, out, cr, cc]} for one session file.
+
+    dedup_key is "message.id\x1frequestId" when both are present, else a
+    per-occurrence synthetic key "path\x1flineno" so records that cannot be
+    de-duplicated are still counted once each. Claude Code writes the SAME
+    assistant message into several files (resumed sessions, subagent
+    sidechains), so counting every line over-counts ~3x; de-duplicating on
+    (id, requestId) - the same key ccusage uses - fixes it. De-dup is applied
+    globally at aggregation time (across all files), not per file.
+    """
+    records: dict[str, list] = {}
     try:
         with path.open("r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
+            for lineno, line in enumerate(f):
                 if '"usage"' not in line:
                     continue
                 try:
@@ -89,15 +100,22 @@ def parse_file(path: Path) -> dict:
                 if not day:
                     continue
                 model = msg.get("model", "unknown")
-                key = f"{day}\x1f{model}"
-                b = buckets.setdefault(key, {"in": 0, "out": 0, "cr": 0, "cc": 0})
-                b["in"] += int(u.get("input_tokens", 0) or 0)
-                b["out"] += int(u.get("output_tokens", 0) or 0)
-                b["cc"] += int(u.get("cache_creation_input_tokens", 0) or 0)
-                b["cr"] += int(u.get("cache_read_input_tokens", 0) or 0)
+                mid = msg.get("id")
+                rid = o.get("requestId")
+                if mid and rid:
+                    key = f"{mid}\x1f{rid}"
+                else:
+                    key = f"{path}\x1f{lineno}"   # cannot dedupe -> unique per occurrence
+                records[key] = [
+                    day, model,
+                    int(u.get("input_tokens", 0) or 0),
+                    int(u.get("output_tokens", 0) or 0),
+                    int(u.get("cache_read_input_tokens", 0) or 0),
+                    int(u.get("cache_creation_input_tokens", 0) or 0),
+                ]
     except Exception:
         pass
-    return buckets
+    return records
 
 
 def load_cache() -> dict:
@@ -139,7 +157,7 @@ def build_summary() -> dict:
             cached = files.get(key)
             if cached and cached.get("mtime") == st.st_mtime and cached.get("size") == st.st_size:
                 continue  # unchanged — reuse cached buckets
-            files[key] = {"mtime": st.st_mtime, "size": st.st_size, "buckets": parse_file(path)}
+            files[key] = {"mtime": st.st_mtime, "size": st.st_size, "records": parse_file(path)}
 
     # Drop cache entries for files that no longer exist / aged out
     for key in list(files.keys()):
@@ -163,20 +181,27 @@ def build_summary() -> dict:
         for k in ("in", "out", "cr", "cc"):
             t[k] += b[k]
 
+    # Merge every file's records into one global dict keyed by dedup_key, so a
+    # message logged in several files is counted ONCE (true duplicates have
+    # identical values; last write wins harmlessly).
+    global_records: dict[str, list] = {}
     for fentry in files.values():
-        for key, b in fentry.get("buckets", {}).items():
-            day, model = key.split("\x1f", 1)
-            day_total = b["in"] + b["out"] + b["cr"] + b["cc"]
-            if day >= d7:
-                daily_tokens[day] = daily_tokens.get(day, 0) + day_total
-            if day == today:
-                add(windows["today"], model, b)
-            if day >= d7:
-                add(windows["week"], model, b)
-            if d13 <= day < d7:
-                add(windows["prev_week"], model, b)
-            if day >= d30:
-                add(windows["month"], model, b)
+        global_records.update(fentry.get("records", {}))
+
+    for rec in global_records.values():
+        day, model, tin, tout, tcr, tcc = rec
+        b = {"in": tin, "out": tout, "cr": tcr, "cc": tcc}
+        day_total = tin + tout + tcr + tcc
+        if day >= d7:
+            daily_tokens[day] = daily_tokens.get(day, 0) + day_total
+        if day == today:
+            add(windows["today"], model, b)
+        if day >= d7:
+            add(windows["week"], model, b)
+        if d13 <= day < d7:
+            add(windows["prev_week"], model, b)
+        if day >= d30:
+            add(windows["month"], model, b)
 
     def short_model(m: str) -> str:
         ml = m.lower()
