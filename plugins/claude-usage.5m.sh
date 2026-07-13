@@ -510,10 +510,39 @@ if [ -n "$CC_JSON" ] && echo "$CC_JSON" | jq -e . >/dev/null 2>&1; then
   CC_WEEK_USD=$(echo "$CC_JSON"  | jq -r '.week.est_cost_usd // 0')
   CC_MONTH_TOK=$(echo "$CC_JSON" | jq -r '.month.total_tokens // 0')
   CC_MONTH_USD=$(echo "$CC_JSON" | jq -r '.month.est_cost_usd // 0')
+  CC_PREV_TOK=$(echo "$CC_JSON"  | jq -r '.prev_week.total_tokens // 0')
+
+  # Model split (top 3 by tokens today)
+  CC_MODEL_PARTS=""
+  while IFS=$'\t' read -r mname mval; do
+    [ -z "$mname" ] && continue
+    CC_MODEL_PARTS="$CC_MODEL_PARTS · $mname $(humanize_tokens "$mval")"
+  done <<EOF
+$(echo "$CC_JSON" | jq -r '.today.by_model | to_entries | map(select(.value > 0)) | sort_by(-.value) | .[0:3][] | "\(.key)\t\(.value)"' 2>/dev/null)
+EOF
+  CC_MODEL_PARTS="${CC_MODEL_PARTS# · }"
+
+  # Week-over-week delta vs the prior 7 days
+  CC_WOW=""
+  if [ "$CC_PREV_TOK" -gt 0 ] 2>/dev/null; then
+    CC_WOW=$(awk -v w="$CC_WEEK_TOK" -v p="$CC_PREV_TOK" 'BEGIN {
+      d = (w - p) / p * 100;
+      if (d >= 0) printf "▲%.0f%%", d; else printf "▼%.0f%%", -d;
+    }')
+  fi
+
+  # 7-day daily token sparkline
+  CC_SPARK=$(sparkline "$(echo "$CC_JSON" | jq -r '.daily | join(" ")' 2>/dev/null)")
 
   echo "CLAUDE CODE · local, this machine | size=11"
   echo "Today · $(humanize_tokens "$CC_TODAY_TOK") tokens · ≈$(humanize_usd "$CC_TODAY_USD") value | size=12"
-  echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11"
+  [ -n "$CC_MODEL_PARTS" ] && echo "  by model · $CC_MODEL_PARTS | size=11"
+  if [ -n "$CC_WOW" ]; then
+    echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") ($CC_WOW vs prev) · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11"
+  else
+    echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11"
+  fi
+  [ -n "$CC_SPARK" ] && echo "  7-day trend $CC_SPARK | font=Menlo size=11"
   echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11"
   echo "---"
 fi
@@ -533,10 +562,25 @@ if [ -n "$CODEX_JSON" ] && echo "$CODEX_JSON" | jq -e '.available == true' >/dev
   CX_MONTH_TOK=$(echo "$CODEX_JSON" | jq -r '.month.tokens // 0')
   CX_ALL_TOK=$(echo "$CODEX_JSON"   | jq -r '.all_time.tokens // 0')
 
+  CX_PREV_TOK=$(echo "$CODEX_JSON" | jq -r '.prev_week.tokens // 0')
+  CX_WOW=""
+  if [ "$CX_PREV_TOK" -gt 0 ] 2>/dev/null; then
+    CX_WOW=$(awk -v w="$CX_WEEK_TOK" -v p="$CX_PREV_TOK" 'BEGIN {
+      d = (w - p) / p * 100;
+      if (d >= 0) printf "▲%.0f%%", d; else printf "▼%.0f%%", -d;
+    }')
+  fi
+  CX_SPARK=$(sparkline "$(echo "$CODEX_JSON" | jq -r '.daily | join(" ")' 2>/dev/null)")
+
   CX_THR_LABEL="threads"; [ "$CX_TODAY_THR" = "1" ] && CX_THR_LABEL="thread"
   echo "CODEX · local, this machine | size=11"
   echo "Today · $(humanize_tokens "$CX_TODAY_TOK") tokens · ${CX_TODAY_THR} ${CX_THR_LABEL} | size=12"
-  echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11"
+  if [ -n "$CX_WOW" ]; then
+    echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") ($CX_WOW vs prev) · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11"
+  else
+    echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11"
+  fi
+  [ -n "$CX_SPARK" ] && echo "  7-day trend $CX_SPARK | font=Menlo size=11"
   echo "---"
 fi
 
