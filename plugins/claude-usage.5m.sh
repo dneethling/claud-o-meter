@@ -30,6 +30,7 @@ ALERT_LOCK="/tmp/claude-usage-alert.lock"
 MUTE_FILE="$HOME/.claude-usage-mute-until"   # epoch; alerts suppressed until then
 LASTSEEN_FILE="$HOME/.claude-usage-lastseen" # "session weekly" from the previous tick
 COPY_SUMMARY="$WIDGET_DIR/copy_summary.py"
+EXPORT="$WIDGET_DIR/export_usage.py"
 RESET_DROP=30                                # a fall of this many points = a reset (clear-to-go ping)
 HISTORY_FILE="$HOME/.claude-usage-history"   # "epoch sessionPct weeklyPct" per render
 HISTORY_CAP=2016                             # 7 days at 5-min cadence (for weekly prediction)
@@ -620,6 +621,9 @@ fi
 echo "---"
 echo "↻ Refresh now | refresh=true sfimage=arrow.clockwise"
 echo "Copy status to clipboard | bash='/bin/bash' param1='-c' param2='\"$PYTHON\" \"$COPY_SUMMARY\" | pbcopy' terminal=false sfimage=doc.on.clipboard"
+echo "Export usage (7 days) | sfimage=square.and.arrow.up"
+echo "-- as CSV | bash='$PYTHON' param1='$EXPORT' param2='csv' terminal=false"
+echo "-- as JSON | bash='$PYTHON' param1='$EXPORT' param2='json' terminal=false"
 
 # Alerts submenu: mute controls + current mute status.
 if [ -f "$MUTE_FILE" ] && [ "$(cat "$MUTE_FILE" 2>/dev/null)" -gt "$(date +%s)" ] 2>/dev/null; then

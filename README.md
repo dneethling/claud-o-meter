@@ -85,6 +85,16 @@ Add a `THEME=` line to the config to change how percentages are coloured:
 
 Errors and incidents always keep their warning colour regardless of theme.
 
+### Actions in the dropdown
+
+- **Copy status to clipboard** - a plaintext snapshot (session/weekly/credits + Claude Code and Codex today/7d) for pasting into a note or message.
+- **Export usage (7 days)** - writes `~/Downloads/claude-usage-YYYY-MM-DD.csv` (or `.json`): a daily table of Claude Code tokens, Codex tokens, and last-known session/weekly percentages, then reveals it in Finder.
+- **Alerts** submenu - Mute 1 hour, Mute until tomorrow 9am, or Unmute. While muted, threshold and reset notifications are suppressed.
+
+### Prediction and reset pings
+
+Under the Weekly row, once enough history has accumulated, the widget projects your burn rate: `at this pace ~100% <when>` (red) if you would be throttled before the weekly resets, or `on track to reset before the cap` (green) if you have headroom. When a limit resets, a one-time notification tells you you are clear to go again.
+
 ## What each menu-bar state means
 
 | Title shows | What it means | What to do |
