@@ -54,8 +54,14 @@ CRIT_PCT=85
 
 # Readable label colour for informational (non-clickable) menu lines. SwiftBar
 # dims non-actionable items, and a bare adaptive colour does not override that,
-# so we force full contrast with a light,dark pair (near-black / near-white).
-LBL="#1c1c1e,#f2f2f7"
+# so we force full contrast. Detect the system appearance and pick a single,
+# definitely-supported colour (avoids relying on SwiftBar light,dark comma
+# syntax, which if unsupported would render near-black on a dark menu).
+if defaults read -g AppleInterfaceStyle 2>/dev/null | grep -qi dark; then
+  LBL="#f2f2f7"   # near-white for dark appearance
+else
+  LBL="#1c1c1e"   # near-black for light appearance
+fi
 
 # Menu-bar title mode. Override by adding a MENUBAR_MODE=... line to the config.
 #   claude (default) -> "16% · 10%w"
