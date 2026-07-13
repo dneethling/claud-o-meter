@@ -5,16 +5,35 @@
 WARN_PCT="${WARN_PCT:-60}"
 CRIT_PCT="${CRIT_PCT:-85}"
 
+# Theme-aware colour for a percentage. Reads $THEME (semantic default):
+#   semantic   -> green / orange / red
+#   colorblind -> Okabe-Ito blue / orange / vermillion (red-green safe)
+#   minimal    -> empty string (monochrome; render sites omit color= via colorkey)
 color_for_pct() {
   local pct="${1%%.*}"
-  [ -z "$pct" ] && { echo "#34C759"; return; }
-  if [ "$pct" -ge "$CRIT_PCT" ]; then
-    echo "#FF3B30"
-  elif [ "$pct" -ge "$WARN_PCT" ]; then
-    echo "#FF9500"
+  local theme="${THEME:-semantic}"
+  [ "$theme" = "minimal" ] && { echo ""; return; }
+  local low warn crit
+  if [ "$theme" = "colorblind" ]; then
+    low="#0072B2"; warn="#E69F00"; crit="#D55E00"
   else
-    echo "#34C759"
+    low="#34C759"; warn="#FF9500"; crit="#FF3B30"
   fi
+  [ -z "$pct" ] && { echo "$low"; return; }
+  if [ "$pct" -ge "$CRIT_PCT" ]; then
+    echo "$crit"
+  elif [ "$pct" -ge "$WARN_PCT" ]; then
+    echo "$warn"
+  else
+    echo "$low"
+  fi
+}
+
+# SwiftBar colour key: "color=<hex>" when non-empty, nothing when empty.
+# Emitting a bare "color=" renders BLACK (invisible on the dark bar), so every
+# render site that uses a theme colour must go through this.
+colorkey() {
+  [ -n "$1" ] && printf 'color=%s' "$1"
 }
 
 progress_bar() {

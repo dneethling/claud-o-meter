@@ -54,6 +54,12 @@ CRIT_PCT=85
 MENUBAR_MODE=$(grep -E '^MENUBAR_MODE=' "$CONFIG" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ')
 [ -z "$MENUBAR_MODE" ] && MENUBAR_MODE="claude"
 
+# Colour theme: semantic (default) | minimal | colorblind. Read from config,
+# exported so lib/format.sh color_for_pct sees it.
+THEME=$(grep -E '^THEME=' "$CONFIG" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ')
+[ -z "$THEME" ] && THEME="semantic"
+export THEME
+
 # Pure display/formatting helpers (color_for_pct, progress_bar, round,
 # humanize_tokens, humanize_usd, format_money, sparkline) live in lib/format.sh
 # so they can be unit-tested. WIDGET_DIR is defined at the top of this file.
@@ -94,7 +100,7 @@ print_metric() {
   # No color= on the text line → SwiftBar uses the adaptive system label
   # color (white in dark mode, black in light mode). Always readable.
   echo "$info | size=12"
-  echo "$bar | font=Menlo size=12 color=$clr"
+  echo "$bar | font=Menlo size=12 $(colorkey "$clr")"
 }
 
 # Format every ISO timestamp passed as argv into a one-line "in 1h 14m" / "mon 3:00pm"
@@ -420,7 +426,7 @@ if [ -n "$INCIDENT" ]; then
   ICON="sfimage=exclamationmark.triangle.fill"
   TITLE_COLOR="#FF9500"
 fi
-echo "$TITLE | $ICON color=$TITLE_COLOR size=12"
+echo "$TITLE | $ICON $(colorkey "$TITLE_COLOR") size=12"
 
 # --- Dropdown ----------------------------------------------------------------
 echo "---"
@@ -437,8 +443,8 @@ fi
 if [ $ON_CREDITS -eq 1 ]; then
   SPEND_CLR=$(color_for_pct "$SPEND_I")
   SPEND_BAR=$(progress_bar "$SPEND_I")
-  echo "On usage credits · ${SPEND_USED_STR} of ${SPEND_LIMIT_STR} (${SPEND_I}%) | size=12 color=$SPEND_CLR"
-  echo "$SPEND_BAR | font=Menlo size=12 color=$SPEND_CLR"
+  echo "On usage credits · ${SPEND_USED_STR} of ${SPEND_LIMIT_STR} (${SPEND_I}%) | size=12 $(colorkey "$SPEND_CLR")"
+  echo "$SPEND_BAR | font=Menlo size=12 $(colorkey "$SPEND_CLR")"
   echo "  Weekly limit reached — Claude is billing against your credit pool until ${WEEK_RESET_TXT:-reset}. | size=11"
   echo "---"
 fi
@@ -448,7 +454,7 @@ if [ -n "$SESSION" ]; then
   if [ -f "$HISTORY_FILE" ]; then
     SESSION_TREND=$(tail -n 24 "$HISTORY_FILE" 2>/dev/null | awk '{printf "%s ", $2}')
     SPARK=$(sparkline "$SESSION_TREND")
-    [ -n "$SPARK" ] && echo "  trend (last ~2h) $SPARK | font=Menlo size=13 color=$(color_for_pct "$S_I")"
+    [ -n "$SPARK" ] && echo "  trend (last ~2h) $SPARK | font=Menlo size=13 $(colorkey "$(color_for_pct "$S_I")")"
   fi
   echo "---"
 fi
@@ -464,9 +470,9 @@ if [ -n "$WEEK" ]; then
     # Prediction line: only shown when there is a real signal.
     if [ "$PRED_WEEK_VERDICT" = "throttle" ] && [ -n "$PRED_WEEK_ETA" ]; then
       ETA_TXT=$(fmt_resets_all "$PRED_WEEK_ETA")
-      echo "  ⚡ at this pace ~100% $ETA_TXT | size=11 color=$(color_for_pct 90)"
+      echo "  ⚡ at this pace ~100% $ETA_TXT | size=11 $(colorkey "$(color_for_pct 90)")"
     elif [ "$PRED_WEEK_VERDICT" = "headroom" ]; then
-      echo "  on track to reset before the cap | size=11 color=$(color_for_pct 30)"
+      echo "  on track to reset before the cap | size=11 $(colorkey "$(color_for_pct 30)")"
     fi
     echo "---"
   fi

@@ -75,6 +75,16 @@ local token volume, add one line to `~/.claude-usage-widget.conf`:
 
 Remove the line (or set `claude`) for the default.
 
+### Colour themes
+
+Add a `THEME=` line to the config to change how percentages are coloured:
+
+    THEME=semantic     # default: green / orange / red
+    THEME=colorblind   # Okabe-Ito blue / orange / vermillion (red-green safe)
+    THEME=minimal      # monochrome: no traffic-light colours, just numbers and bars
+
+Errors and incidents always keep their warning colour regardless of theme.
+
 ## What each menu-bar state means
 
 | Title shows | What it means | What to do |
