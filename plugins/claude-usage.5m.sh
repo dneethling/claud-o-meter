@@ -19,6 +19,7 @@ CC_SUMMARY="$HOME/.claude-usage-cc-summary.json"
 CODEX_USAGE="$WIDGET_DIR/codex_usage.py"
 CODEX_SUMMARY="$HOME/.claude-usage-codex-summary.json"
 STATUS_CHECK="$WIDGET_DIR/status_check.py"
+PREDICT="$WIDGET_DIR/predict.py"
 CONFIG="$HOME/.claude-usage-widget.conf"
 RAW="/tmp/claude-usage-raw.json"
 ERR_LOG="/tmp/claude-usage-err.log"
@@ -285,6 +286,14 @@ if [[ "$S_I" =~ ^[0-9]+$ ]] && [[ "$W_I" =~ ^[0-9]+$ ]]; then
   fi
 fi
 
+# Prediction: burn-rate ETA vs reset time (reads the history just written above).
+PRED_WEEK_VERDICT=""; PRED_WEEK_ETA=""
+PRED_JSON=$(run_timeout 3 "$PYTHON" "$PREDICT" "$SESSION_RESET" "$WEEK_RESET" 2>/dev/null)
+if [ -n "$PRED_JSON" ] && echo "$PRED_JSON" | jq -e . >/dev/null 2>&1; then
+  PRED_WEEK_VERDICT=$(echo "$PRED_JSON" | jq -r '.weekly.verdict // ""')
+  PRED_WEEK_ETA=$(echo "$PRED_JSON" | jq -r '.weekly.eta_iso // ""')
+fi
+
 # Pre-compute all four reset strings in ONE Python invocation.
 # bash 3.2 (macOS default) has no `mapfile` — use a portable while-read.
 RESET_LINES=()
@@ -452,6 +461,13 @@ if [ -n "$WEEK" ]; then
     echo "---"
   else
     print_metric "Weekly · all models" "$WEEK" "$WEEK_RESET_TXT"
+    # Prediction line: only shown when there is a real signal.
+    if [ "$PRED_WEEK_VERDICT" = "throttle" ] && [ -n "$PRED_WEEK_ETA" ]; then
+      ETA_TXT=$(fmt_resets_all "$PRED_WEEK_ETA")
+      echo "  ⚡ at this pace ~100% $ETA_TXT | size=11 color=$(color_for_pct 90)"
+    elif [ "$PRED_WEEK_VERDICT" = "headroom" ]; then
+      echo "  on track to reset before the cap | size=11 color=$(color_for_pct 30)"
+    fi
     echo "---"
   fi
 fi
