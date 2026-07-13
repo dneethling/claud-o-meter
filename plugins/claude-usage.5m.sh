@@ -27,6 +27,10 @@ REFRESH_LOG="/tmp/claude-usage-refresh.log"
 REFRESH_ERR="/tmp/claude-usage-refresh.err"
 ALERT_STATE="/tmp/claude-usage-alert-state"
 ALERT_LOCK="/tmp/claude-usage-alert.lock"
+MUTE_FILE="$HOME/.claude-usage-mute-until"   # epoch; alerts suppressed until then
+LASTSEEN_FILE="$HOME/.claude-usage-lastseen" # "session weekly" from the previous tick
+COPY_SUMMARY="$WIDGET_DIR/copy_summary.py"
+RESET_DROP=30                                # a fall of this many points = a reset (clear-to-go ping)
 HISTORY_FILE="$HOME/.claude-usage-history"   # "epoch sessionPct weeklyPct" per render
 HISTORY_CAP=2016                             # 7 days at 5-min cadence (for weekly prediction)
 LOG_MAX_BYTES=1048576    # 1 MB
@@ -146,6 +150,13 @@ PY
 # Caller MUST hold the alert flock — see _under_alert_lock below.
 notify() {
   local title="$1" msg="$2" key="$3"
+  # Snooze: suppress all alerts while a mute is active.
+  if [ -f "$MUTE_FILE" ]; then
+    local until; until=$(cat "$MUTE_FILE" 2>/dev/null)
+    if [ -n "$until" ] && [ "$(date +%s)" -lt "$until" ] 2>/dev/null; then
+      return
+    fi
+  fi
   # Already-alerted check
   if [ -f "$ALERT_STATE" ] && grep -F -x -q "$key" "$ALERT_STATE" 2>/dev/null; then
     return
@@ -357,6 +368,21 @@ if mkdir "$ALERT_LOCK_DIR" 2>/dev/null; then
   else
     clear_alert "credits_crit"
     clear_alert "credits_warn"
+  fi
+
+  # Reset-ready ping: if a metric dropped sharply since last tick, the window
+  # reset - tell the user they are clear to go again. Then remember this tick.
+  if [ -f "$LASTSEEN_FILE" ]; then
+    read -r LAST_S LAST_W < "$LASTSEEN_FILE" 2>/dev/null
+    if [[ "$S_I" =~ ^[0-9]+$ ]] && [[ "$LAST_S" =~ ^[0-9]+$ ]] && [ $((LAST_S - S_I)) -ge "$RESET_DROP" ]; then
+      notify "Claude Usage" "Session reset - you are clear to go" "session_reset_$(date +%Y%m%d%H)"
+    fi
+    if [[ "$W_I" =~ ^[0-9]+$ ]] && [[ "$LAST_W" =~ ^[0-9]+$ ]] && [ $((LAST_W - W_I)) -ge "$RESET_DROP" ]; then
+      notify "Claude Usage" "Weekly limit reset - fresh week, clear to go" "weekly_reset_$(date +%Y%m%d)"
+    fi
+  fi
+  if [[ "$S_I" =~ ^[0-9]+$ ]] && [[ "$W_I" =~ ^[0-9]+$ ]]; then
+    printf '%s %s\n' "$S_I" "$W_I" > "$LASTSEEN_FILE"
   fi
 fi
 # If mkdir failed another run is in the alerts section — skip alerts this tick.
@@ -593,6 +619,19 @@ fi
 # Footer
 echo "---"
 echo "↻ Refresh now | refresh=true sfimage=arrow.clockwise"
+echo "Copy status to clipboard | bash='/bin/bash' param1='-c' param2='\"$PYTHON\" \"$COPY_SUMMARY\" | pbcopy' terminal=false sfimage=doc.on.clipboard"
+
+# Alerts submenu: mute controls + current mute status.
+if [ -f "$MUTE_FILE" ] && [ "$(cat "$MUTE_FILE" 2>/dev/null)" -gt "$(date +%s)" ] 2>/dev/null; then
+  MUTE_TXT=$(fmt_resets_all "$(date -r "$(cat "$MUTE_FILE")" +%Y-%m-%dT%H:%M:%S%z 2>/dev/null)")
+  echo "Alerts muted ${MUTE_TXT:+(unmutes $MUTE_TXT)} | sfimage=bell.slash"
+else
+  echo "Alerts | sfimage=bell"
+fi
+echo "-- Mute 1 hour | bash='/bin/bash' param1='-c' param2='echo \$(( \$(date +%s)+3600 )) > \"$MUTE_FILE\"' terminal=false refresh=true"
+echo "-- Mute until tomorrow 9am | bash='/bin/bash' param1='-c' param2='echo \$(date -j -f %Y-%m-%d-%H:%M:%S \"\$(date -v+1d +%Y-%m-%d)-09:00:00\" +%s) > \"$MUTE_FILE\"' terminal=false refresh=true"
+echo "-- Unmute | bash='/bin/rm' param1='-f' param2='$MUTE_FILE' terminal=false refresh=true"
+
 echo "Open settings | href=https://claude.ai/settings/usage sfimage=gear"
 echo "Edit config | bash='/usr/bin/open' param1='-t' param2='$CONFIG' terminal=false sfimage=pencil"
 echo "View raw JSON | bash='/usr/bin/open' param1='-t' param2='$RAW' terminal=false sfimage=doc.text"
