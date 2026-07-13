@@ -1,5 +1,13 @@
 # Claude/Codex Usage Widget - Multi-Provider Roadmap & Implementation Plan
 
+> **STATUS (2026-07-13):** Phases 1-4 below are DONE and shipped. A further v3
+> feature set (prediction, deeper analytics, palette themes, smarter alerts +
+> snooze + copy, data export) is also DONE - see
+> `docs/superpowers/specs/2026-07-12-widget-v3-features-design.md`. The ONLY
+> outstanding item is **Phase 5 (Codex web rate-limits)**, which still needs a
+> one-time DevTools capture of the ChatGPT usage endpoint from the user. Skip
+> straight to Phase 5 unless you are re-deriving history.
+
 > **For agentic workers:** This is a self-contained plan. You have **zero prior context** and that is fine - everything you need is in this file. Execute phases **top to bottom**, one task at a time. Every task ends with a test and a commit. Do **not** skip the "Verify" steps. If a verify step fails, stop and fix before moving on. Steps use checkbox (`- [ ]`) syntax so you can track progress.
 
 **Goal:** Extend a working macOS SwiftBar menu-bar widget (currently shows Claude + Codex usage) with five upgrades: a small provider-contract foundation, usage-trend sparklines, a status/incident badge, a configurable menu-bar glance, and Codex web rate-limits.
