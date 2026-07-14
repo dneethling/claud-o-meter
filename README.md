@@ -1,11 +1,11 @@
 # Claude Usage Widget (SwiftBar)
 
-Menu bar widget that shows your Claude.ai session %, weekly %, Sonnet % and Opus % so you don't have to open Settings.
+Menu bar widget that shows your Claude.ai session %, weekly %, and the current per-model weekly limit (Fable / Sonnet / Opus, whichever Anthropic scopes) so you don't have to open Settings.
 
 ## What you're getting
 
 - **Title in menu bar:** `🤖 29% · 7%w` (session · weekly), colour-coded green/orange/red as you approach limits
-- **Dropdown:** progress bar + reset time per metric (session, weekly all-models, weekly Sonnet, weekly Opus, extra usage if enabled)
+- **Dropdown:** progress bar + reset time per metric (session, weekly all-models, per-model weekly limit read live from the API's `limits[]`, extra usage if enabled)
 - **Notifications:** macOS Notification Centre alert at 60% (warning) and 85% (critical), de-duplicated so you only get one per crossing
 - **Auto cookie refresh:** pulls a fresh session cookie from Arc / Chrome / Brave on a 30-min schedule and on every failed fetch — no manual copy-paste, no expiry surprises
 - **Refresh:** every 5 minutes (rename the file `.1m.sh` for every minute, `.10m.sh` for every 10, etc.)

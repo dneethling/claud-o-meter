@@ -266,10 +266,20 @@ SESSION=$(echo "$RESP" | jq -r '.five_hour.utilization // empty')
 SESSION_RESET=$(echo "$RESP" | jq -r '.five_hour.resets_at // empty')
 WEEK=$(echo "$RESP" | jq -r '.seven_day.utilization // empty')
 WEEK_RESET=$(echo "$RESP" | jq -r '.seven_day.resets_at // empty')
-SONNET=$(echo "$RESP" | jq -r '.seven_day_sonnet.utilization // empty')
-SONNET_RESET=$(echo "$RESP" | jq -r '.seven_day_sonnet.resets_at // empty')
-OPUS=$(echo "$RESP" | jq -r '.seven_day_opus.utilization // empty')
-OPUS_RESET=$(echo "$RESP" | jq -r '.seven_day_opus.resets_at // empty')
+# Per-model weekly limits (Fable / Sonnet / Opus / ...). The authoritative source
+# is the limits[] array, which carries the human-readable model name; the old
+# top-level seven_day_sonnet/opus fields are often null now. One tab-separated
+# line per scoped model: "name<TAB>percent<TAB>resets_at".
+SCOPED_LIMITS=$(echo "$RESP" | jq -r '.limits[]? | select(.scope.model.display_name != null) | [.scope.model.display_name, (.percent|tostring), (.resets_at // "")] | @tsv' 2>/dev/null)
+# Fallback to the legacy fields if limits[] carried no scoped entries.
+if [ -z "$SCOPED_LIMITS" ]; then
+  _sv=$(echo "$RESP" | jq -r '.seven_day_sonnet.utilization // empty')
+  _sr=$(echo "$RESP" | jq -r '.seven_day_sonnet.resets_at // empty')
+  _ov=$(echo "$RESP" | jq -r '.seven_day_opus.utilization // empty')
+  _or=$(echo "$RESP" | jq -r '.seven_day_opus.resets_at // empty')
+  [ -n "$_sv" ] && SCOPED_LIMITS="$(printf 'Sonnet\t%s\t%s' "$_sv" "$_sr")"
+  [ -n "$_ov" ] && SCOPED_LIMITS="$(printf '%s\nOpus\t%s\t%s' "$SCOPED_LIMITS" "$_ov" "$_or")"
+fi
 EXTRA_ENABLED=$(echo "$RESP" | jq -r '.extra_usage.is_enabled // "false"')
 EXTRA_UTIL=$(echo "$RESP" | jq -r '.extra_usage.utilization // empty')
 
@@ -326,11 +336,9 @@ fi
 # Pre-compute all four reset strings in ONE Python invocation.
 # bash 3.2 (macOS default) has no `mapfile` — use a portable while-read.
 RESET_LINES=()
-while IFS= read -r _line; do RESET_LINES+=("$_line"); done < <(fmt_resets_all "$SESSION_RESET" "$WEEK_RESET" "$SONNET_RESET" "$OPUS_RESET")
+while IFS= read -r _line; do RESET_LINES+=("$_line"); done < <(fmt_resets_all "$SESSION_RESET" "$WEEK_RESET")
 SESSION_RESET_TXT="${RESET_LINES[0]:-}"
 WEEK_RESET_TXT="${RESET_LINES[1]:-}"
-SONNET_RESET_TXT="${RESET_LINES[2]:-}"
-OPUS_RESET_TXT="${RESET_LINES[3]:-}"
 
 # --- Alerts ------------------------------------------------------------------
 # macOS has no `flock` util — use the atomic-mkdir pattern as the mutex.
@@ -516,14 +524,17 @@ if [ -n "$WEEK" ]; then
   fi
 fi
 
-if [ -n "$SONNET" ]; then
-  print_metric "Weekly · Sonnet" "$SONNET" "$SONNET_RESET_TXT"
-  echo "---"
-fi
-
-if [ -n "$OPUS" ]; then
-  print_metric "Weekly · Opus" "$OPUS" "$OPUS_RESET_TXT"
-  echo "---"
+# Per-model weekly limits, dynamic from limits[] (shows Fable/Sonnet/Opus as
+# whatever Anthropic currently scopes). One row each.
+if [ -n "$SCOPED_LIMITS" ]; then
+  while IFS=$'\t' read -r sm_name sm_pct sm_reset; do
+    [ -z "$sm_name" ] && continue
+    sm_reset_txt=$(fmt_resets_all "$sm_reset")
+    print_metric "Weekly · $sm_name" "$sm_pct" "$sm_reset_txt"
+    echo "---"
+  done <<EOF
+$SCOPED_LIMITS
+EOF
 fi
 
 # Extra usage block — only show when credits are enabled but NOT actively in use,
