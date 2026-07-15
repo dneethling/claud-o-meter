@@ -98,23 +98,40 @@ def candidates() -> list[tuple[str, str, Path, float]]:
     return found
 
 
+# Chromium's hard-coded fallback: when Chrome cannot store its Safe Storage key
+# in the macOS Keychain (managed or freshly-provisioned Macs, or no Keychain
+# access on first run), it encrypts cookies with the literal password "peanuts".
+# Such machines have no "<Browser> Safe Storage" Keychain entry at all, so the
+# Keychain lookup returns nothing - try peanuts too so they are not locked out.
+# Safe: a wrong password yields values that fail live API validation downstream.
+CHROMIUM_FALLBACK_PW = "peanuts"
+
+
 def try_extract(service: str, cookie_file: Path):
-    """Return (cookies_dict, None) on success or (None, reason_str) on failure."""
+    """Return (cookies_dict, None) on success or (None, reason_str) on failure.
+
+    Tries the Keychain Safe Storage key first, then the Chromium "peanuts"
+    fallback for machines where that key was never created.
+    """
     pw = keychain_password(service)
+    attempts: list[str] = []
+    for candidate_pw in [p for p in (pw, CHROMIUM_FALLBACK_PW) if p]:
+        try:
+            cookies = chrome_cookies(
+                "https://claude.ai/settings/usage",
+                cookie_file=str(cookie_file),
+                password=candidate_pw,
+            )
+        except Exception as e:
+            attempts.append(f"decrypt failed: {e}")
+            continue
+        if all(k in cookies for k in REQUIRED):
+            return cookies, None
+        attempts.append(f"missing required: {[k for k in REQUIRED if k not in cookies]}")
     if not pw:
-        return None, f"no keychain entry for {service!r}"
-    try:
-        cookies = chrome_cookies(
-            "https://claude.ai/settings/usage",
-            cookie_file=str(cookie_file),
-            password=pw,
-        )
-    except Exception as e:
-        return None, f"decrypt failed: {e}"
-    if not all(k in cookies for k in REQUIRED):
-        missing = [k for k in REQUIRED if k not in cookies]
-        return None, f"missing required: {missing}"
-    return cookies, None
+        return None, (f"no keychain entry for {service!r} and the Chromium "
+                      "'peanuts' fallback did not yield a session")
+    return None, "; ".join(attempts) or "extraction failed"
 
 
 def read_usage_url() -> str | None:
