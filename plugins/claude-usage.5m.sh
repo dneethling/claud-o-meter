@@ -159,7 +159,10 @@ def fmt(iso):
     if total_min < 24*60:
         h, m = divmod(total_min, 60)
         return f"in {h}h {m}m"
-    return dt.strftime("%a %-I:%M%p").lower()
+    # >=24h out: weekday + time alone is ambiguous (this week vs next - a reset
+    # 7 days away on a Wednesday looks identical to one earlier today). Include
+    # the calendar date so it is unmistakable. e.g. "wed 22 jul, 9:03am".
+    return dt.strftime("%a %-d %b, %-I:%M%p").lower()
 
 for arg in sys.argv[1:]:
     print(fmt(arg))
