@@ -27,7 +27,12 @@ from pycookiecheat import chrome_cookies
 CONFIG_PATH = Path.home() / ".claude-usage-widget.conf"
 LOCK_PATH = Path.home() / ".claude-usage-widget.conf.lock"
 NEEDED = ["sessionKey", "lastActiveOrg", "anthropic-device-id", "cf_clearance", "__cf_bm"]
-REQUIRED = ["sessionKey", "cf_clearance"]
+# Only sessionKey is truly required to authenticate. cf_clearance / __cf_bm are
+# Cloudflare cookies that are often absent (they are issued only after a CF
+# challenge and expire quickly) - curl_cffi's chrome TLS impersonation clears
+# Cloudflare without them. Verified: sessionKey alone returns HTTP 200 on the
+# usage API. Requiring cf_clearance here wrongly rejected logged-in users.
+REQUIRED = ["sessionKey"]
 HOME = Path.home()
 KEYCHAIN_TIMEOUT_SECONDS = 5
 API_VALIDATION_TIMEOUT_SECONDS = 10
@@ -43,16 +48,39 @@ BROWSERS = [
 ]
 
 
+_KEYCHAIN_CACHE: dict = {}
+
+
 def keychain_password(service: str) -> str | None:
-    """Return Safe Storage password from the login keychain, or None on miss/timeout."""
+    """Return Safe Storage password from the login keychain, or None on miss/timeout.
+
+    Memoised per service for the life of the process. We probe many browser
+    profiles that share a single Safe Storage key (every Chrome profile uses
+    "Chrome Safe Storage"), and each `security` call can raise a macOS Keychain
+    permission dialog. Caching means at most one prompt per browser per run
+    instead of one per profile - which is what made the widget ask for
+    permission over and over on machines with several profiles.
+    """
+    if service in _KEYCHAIN_CACHE:
+        return _KEYCHAIN_CACHE[service]
     try:
-        return subprocess.check_output(
+        pw = subprocess.check_output(
             ["security", "find-generic-password", "-w", "-s", service],
             stderr=subprocess.DEVNULL,
             timeout=KEYCHAIN_TIMEOUT_SECONDS,
         ).decode().strip()
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        # Prompt shown but not answered within the timeout - transient. Do NOT
+        # cache: the key becomes available once the user approves the dialog,
+        # and caching None here would mask it for every later profile this run.
         return None
+    except subprocess.CalledProcessError:
+        # Genuine miss (browser not installed / no such keychain item). Safe to
+        # cache so we do not re-shell `security` once per profile.
+        _KEYCHAIN_CACHE[service] = None
+        return None
+    _KEYCHAIN_CACHE[service] = pw
+    return pw
 
 
 def candidates() -> list[tuple[str, str, Path, float]]:
