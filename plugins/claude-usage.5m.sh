@@ -446,15 +446,16 @@ else
   if [[ "$W_I" =~ ^[0-9]+$ ]]; then
     TITLE="$TITLE · ${W_I}%w"
   fi
-  # Optional multi-provider glance: append local token volume per MENUBAR_MODE.
+  # Optional multi-provider glance: append TODAY's local token volume per
+  # MENUBAR_MODE (today = the live-changing number, parallel to Claude's %).
   # Read compact figures from the warm summary files (no ordering dependency).
   if [ "$MENUBAR_MODE" = "both" ] && [ -f "$CC_SUMMARY" ]; then
-    CC_M=$(jq -r '.month.total_tokens // empty' "$CC_SUMMARY" 2>/dev/null)
-    [ -n "$CC_M" ] && TITLE="$TITLE · cc $(humanize_tokens "$CC_M")"
+    CC_T=$(jq -r '.today.total_tokens // empty' "$CC_SUMMARY" 2>/dev/null)
+    [ -n "$CC_T" ] && TITLE="$TITLE · cc $(humanize_tokens "$CC_T")"
   fi
   if { [ "$MENUBAR_MODE" = "codex" ] || [ "$MENUBAR_MODE" = "both" ]; } && [ -f "$CODEX_SUMMARY" ]; then
-    CX_M=$(jq -r '.month.tokens // empty' "$CODEX_SUMMARY" 2>/dev/null)
-    [ -n "$CX_M" ] && TITLE="$TITLE · cx $(humanize_tokens "$CX_M")"
+    CX_T=$(jq -r '.today.tokens // empty' "$CODEX_SUMMARY" 2>/dev/null)
+    [ -n "$CX_T" ] && TITLE="$TITLE · cx $(humanize_tokens "$CX_T")"
   fi
 fi
 

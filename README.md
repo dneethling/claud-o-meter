@@ -70,10 +70,12 @@ Click the SwiftBar icon → Refresh. You should see something like `29% · 7%w` 
 By default the menu bar shows Claude limits only: `16% · 10%w`. To also surface
 local token volume, add one line to `~/.claude-usage-widget.conf`:
 
-    MENUBAR_MODE=codex   # adds Codex 30-day tokens:  16% · 10%w · cx 132M
-    MENUBAR_MODE=both    # adds Claude Code too:       16% · 10%w · cc 22.5B · cx 132M
+    MENUBAR_MODE=codex   # adds Codex today's tokens:  16% · 10%w · cx 7M
+    MENUBAR_MODE=both    # adds Claude Code today too:  16% · 10%w · cc 109M · cx 7M
 
-Remove the line (or set `claude`) for the default.
+The appended figures are TODAY's token volume (the live-changing number),
+alongside Claude's session and weekly percentages. Remove the line (or set
+`claude`) for the default.
 
 ### Colour themes
 
