@@ -10,7 +10,10 @@
 
 set -o pipefail
 
-WIDGET_DIR="/Users/darrenneethling/Downloads/claude-usage-widget"
+# Portable: derive the repo root from this script's own location, so the widget
+# works on any machine/username (SwiftBar runs the plugin from <repo>/plugins/).
+# Falls back to the env override CLAUDE_WIDGET_DIR if set.
+WIDGET_DIR="${CLAUDE_WIDGET_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)}"
 PYTHON="$WIDGET_DIR/.venv/bin/python"
 FETCHER="$WIDGET_DIR/fetch_usage.py"
 REFRESHER="$WIDGET_DIR/refresh_cookie.py"
@@ -31,6 +34,11 @@ MUTE_FILE="$HOME/.claude-usage-mute-until"   # epoch; alerts suppressed until th
 LASTSEEN_FILE="$HOME/.claude-usage-lastseen" # "session weekly" from the previous tick
 COPY_SUMMARY="$WIDGET_DIR/copy_summary.py"
 EXPORT="$WIDGET_DIR/export_usage.py"
+CHECK_UPDATE="$WIDGET_DIR/check_update.sh"
+UPDATE_SCRIPT="$WIDGET_DIR/update.sh"
+UPDATE_STATUS="$HOME/.claude-usage-update-status"
+UPDATE_CHECK_INTERVAL=21600   # re-check GitHub at most every 6h (in background)
+REPO_URL="https://github.com/dneethling/claud-o-meter"
 RESET_DROP=30                                # a fall of this many points = a reset (clear-to-go ping)
 HISTORY_FILE="$HOME/.claude-usage-history"   # "epoch sessionPct weeklyPct" per render
 HISTORY_CAP=2016                             # 7 days at 5-min cadence (for weekly prediction)
@@ -684,5 +692,25 @@ echo "Open settings | href=https://claude.ai/settings/usage sfimage=gear"
 echo "Edit config | bash='/usr/bin/open' param1='-t' param2='$CONFIG' terminal=false sfimage=pencil"
 echo "View raw JSON | bash='/usr/bin/open' param1='-t' param2='$RAW' terminal=false sfimage=doc.text"
 echo "View error log | bash='/usr/bin/open' param1='-t' param2='$ERR_LOG' terminal=false sfimage=exclamationmark.bubble"
+
+# --- Updates -----------------------------------------------------------------
+# Read the cached update status (instant); refresh it in the background if stale
+# so we never block the render on a network git fetch.
+UPD_BEHIND=0; UPD_SHA="?"; UPD_TS=0
+if [ -f "$UPDATE_STATUS" ]; then
+  read -r UPD_BEHIND UPD_SHA UPD_TS < "$UPDATE_STATUS"
+fi
+if [ ! -f "$UPDATE_STATUS" ] || { [ -n "$UPD_TS" ] && [ $(( $(date +%s) - UPD_TS )) -gt "$UPDATE_CHECK_INTERVAL" ]; } 2>/dev/null; then
+  ( bash "$CHECK_UPDATE" >/dev/null 2>&1 & )
+fi
+echo "---"
+if [ "${UPD_BEHIND:-0}" -gt 0 ] 2>/dev/null; then
+  echo "⬆ Update available ($UPD_BEHIND new) | color=#FF9500 sfimage=arrow.down.circle.fill"
+  echo "Update now | bash='/bin/bash' param1='$UPDATE_SCRIPT' terminal=false refresh=true sfimage=arrow.down.circle"
+else
+  echo "Up to date (build $UPD_SHA) | color=$LBL sfimage=checkmark.seal"
+fi
+echo "Check for updates | bash='/bin/bash' param1='$CHECK_UPDATE' terminal=false refresh=true sfimage=arrow.triangle.2.circlepath"
+echo "View on GitHub | href=$REPO_URL sfimage=chevron.left.forwardslash.chevron.right"
 echo "---"
 echo "Force cookie refresh | bash='$PYTHON' param1='$REFRESHER' terminal=false refresh=true sfimage=key.fill"

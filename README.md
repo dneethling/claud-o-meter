@@ -7,7 +7,7 @@ Menu bar widget that shows your Claude.ai session %, weekly %, and the current p
 - **Title in menu bar:** `🤖 29% · 7%w` (session · weekly), colour-coded green/orange/red as you approach limits
 - **Dropdown:** progress bar + reset time per metric (session, weekly all-models, per-model weekly limit read live from the API's `limits[]`, extra usage if enabled)
 - **Notifications:** macOS Notification Centre alert at 60% (warning) and 85% (critical), de-duplicated so you only get one per crossing
-- **Auto cookie refresh:** pulls a fresh session cookie from Arc / Chrome / Brave on a 30-min schedule and on every failed fetch — no manual copy-paste, no expiry surprises
+- **Auto cookie refresh:** pulls a fresh session cookie from Arc / Chrome / Brave on a 30-min schedule and on every failed fetch - no manual copy-paste, no expiry surprises
 - **Refresh:** every 5 minutes (rename the file `.1m.sh` for every minute, `.10m.sh` for every 10, etc.)
 
 ## How the auth flow works (so the magic isn't a mystery)
@@ -20,7 +20,34 @@ There's no public API for Claude usage. The widget hits the same internal endpoi
 
 The "test-each-cookie-against-the-API" step is what stops a stale session in Chrome Profile 2 from drowning out a valid session in Arc Profile 5.
 
-## Install
+## Install (one command)
+
+Requires [Homebrew](https://brew.sh). Then:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dneethling/claud-o-meter/master/install.sh | bash
+```
+
+This clones the repo to `~/claud-o-meter`, sets up Python, installs SwiftBar and jq,
+detects your Claude org from your browser, wires up the menu bar and the background
+cookie refresh, and launches it. Make sure you are logged into `claude.ai` in Arc,
+Chrome, or Brave first, so it can read your session. That is the whole install.
+
+## Updating
+
+The dropdown checks GitHub for new versions (in the background, at most every 6 hours):
+
+- When a new version is available it shows **"⬆ Update available"** with an **Update now**
+  button - one click pulls the latest and refreshes.
+- Or click **Check for updates** any time.
+- For hands-off updates, add `AUTO_UPDATE=1` to `~/.claude-usage-widget.conf` and it
+  pulls automatically when the background check finds a new version.
+
+Updates are `git pull --ff-only`, so they never clobber local edits, and your config
+(cookie, org) lives outside the repo and is never touched. **View on GitHub** in the
+dropdown opens the repo.
+
+## Manual install (if you prefer)
 
 ### 1. Tools
 
@@ -39,7 +66,7 @@ python3 -m venv .venv
 
 ### 2. Point SwiftBar at the repo's `plugins/` directory
 
-Launch SwiftBar → Preferences → Plugin Folder → choose `/path/to/claude-usage-widget/plugins`. **Do not copy or symlink the plugin file** — let SwiftBar read it from the repo so updates land instantly.
+Launch SwiftBar → Preferences → Plugin Folder → choose `/path/to/claude-usage-widget/plugins`. **Do not copy or symlink the plugin file** - let SwiftBar read it from the repo so updates land instantly.
 
 If you previously copied it into `~/Library/Application Support/SwiftBar/Plugins/`, delete that copy (or any empty directories with the plugin name) so they don't shadow the real one.
 
@@ -59,7 +86,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.darren.claude-usage-
 launchctl list | grep claude-usage
 ```
 
-The plugin also calls `refresh_cookie.py` itself whenever a fetch fails, so even without the launch agent things keep working — the agent just keeps the cookie fresh proactively so you never see a momentary error tile.
+The plugin also calls `refresh_cookie.py` itself whenever a fetch fails, so even without the launch agent things keep working - the agent just keeps the cookie fresh proactively so you never see a momentary error tile.
 
 ### 5. First run
 
@@ -105,17 +132,17 @@ Under the Weekly row, once enough history has accumulated, the widget projects y
 | `29% · 7%w` (green) | Session 29%, weekly 7%. Everything's fine. | Nothing. |
 | Orange gauge / 60-84% | Session approaching limit. You also got a notification. | Maybe slow down. |
 | Red bolt / 85%+ | Critical. Another notification. | Wait for reset, see dropdown. |
-| `⚠ Re-auth` (orange) | No valid Claude session anywhere — you logged out everywhere. | Log into `claude.ai` in your browser; the widget recovers on its own within 5 min. |
+| `⚠ Re-auth` (orange) | No valid Claude session anywhere - you logged out everywhere. | Log into `claude.ai` in your browser; the widget recovers on its own within 5 min. |
 | `✖ Claude` (red) | Network / Cloudflare / something transient. | Click → View error log. Usually self-heals next tick. |
-| `?%` (orange `?` icon) | Fetch succeeded but the JSON shape doesn't match — Anthropic likely renamed a field. | Click → View raw JSON. Send the snippet to whoever maintains your fork so they can fix the `jq` paths. |
+| `?%` (orange `?` icon) | Fetch succeeded but the JSON shape doesn't match - Anthropic likely renamed a field. | Click → View raw JSON. Send the snippet to whoever maintains your fork so they can fix the `jq` paths. |
 
 ## Troubleshooting
 
 ### Logs
-- `/tmp/claude-usage-err.log` — last stderr from fetch / refresh
-- `/tmp/claude-usage-refresh.log` — stdout of the launchd-driven refresher
-- `/tmp/claude-usage-refresh.err` — stderr of same (this is where you look when something is wrong)
-- `/tmp/claude-usage-raw.json` — last successful API response (only overwritten on success — so failures don't poison it)
+- `/tmp/claude-usage-err.log` - last stderr from fetch / refresh
+- `/tmp/claude-usage-refresh.log` - stdout of the launchd-driven refresher
+- `/tmp/claude-usage-refresh.err` - stderr of same (this is where you look when something is wrong)
+- `/tmp/claude-usage-raw.json` - last successful API response (only overwritten on success - so failures don't poison it)
 
 All logs auto-rotate to `.1` when they exceed 1 MB.
 
@@ -137,7 +164,7 @@ Exits 1 with the reason on stderr if it can't get a clean JSON 200.
 
 ### "I'm logged in but the widget says Re-auth"
 
-Run the verbose refresh above. The reason for each rejected browser is printed — common ones: `account_session_invalid` (that profile is logged out), `decrypt failed` (Keychain access denied), `missing required` (Claude was never opened in that profile).
+Run the verbose refresh above. The reason for each rejected browser is printed - common ones: `account_session_invalid` (that profile is logged out), `decrypt failed` (Keychain access denied), `missing required` (Claude was never opened in that profile).
 
 ### macOS Notifications never appear
 
@@ -145,7 +172,7 @@ Allow notifications for `osascript` or `Script Editor` in System Settings → No
 
 ## Caveats (read these)
 
-- **Unofficial.** This uses the same endpoint the settings page uses. Anthropic can change it any time and the widget breaks — when that happens you'll see `?%` in the title, not silence.
+- **Unofficial.** This uses the same endpoint the settings page uses. Anthropic can change it any time and the widget breaks - when that happens you'll see `?%` in the title, not silence.
 - **Personal use only.** Don't share your cookies. 5-minute polling is plenty.
 - **Browser cookie access requires Keychain permission** the first time the refresher runs. Approve the prompt for each browser you use with Claude.
 
@@ -157,6 +184,6 @@ Allow notifications for `osascript` or `Script Editor` in System Settings → No
 | `fetch_usage.py` | One-shot HTTP fetch with Cloudflare bypass |
 | `refresh_cookie.py` | Pull + validate + write fresh cookies |
 | `com.darren.claude-usage-refresh.plist` | LaunchAgent for the 30-min refresh job |
-| `~/.claude-usage-widget.conf` | Endpoint + current cookie (created on first refresh) — mode 600 |
+| `~/.claude-usage-widget.conf` | Endpoint + current cookie (created on first refresh) - mode 600 |
 | `~/.claude-usage-widget.conf.lock` | Empty lock file used by atomic writes |
 | `/tmp/claude-usage-*.log` | Logs (see Troubleshooting) |
