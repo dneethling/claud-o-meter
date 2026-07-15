@@ -454,8 +454,14 @@ else
     [ -n "$CC_T" ] && TITLE="$TITLE · cc $(humanize_tokens "$CC_T")"
   fi
   if { [ "$MENUBAR_MODE" = "codex" ] || [ "$MENUBAR_MODE" = "both" ]; } && [ -f "$CODEX_SUMMARY" ]; then
-    CX_T=$(jq -r '.today.tokens // empty' "$CODEX_SUMMARY" 2>/dev/null)
-    [ -n "$CX_T" ] && TITLE="$TITLE · cx $(humanize_tokens "$CX_T")"
+    # Prefer the real quota % (from Codex's rate_limits); fall back to today's tokens.
+    CX_Q=$(jq -r '.quota.primary.used_percent // empty' "$CODEX_SUMMARY" 2>/dev/null)
+    if [ -n "$CX_Q" ]; then
+      TITLE="$TITLE · cx $(round "$CX_Q")%"
+    else
+      CX_T=$(jq -r '.today.tokens // empty' "$CODEX_SUMMARY" 2>/dev/null)
+      [ -n "$CX_T" ] && TITLE="$TITLE · cx $(humanize_tokens "$CX_T")"
+    fi
   fi
 fi
 
@@ -630,6 +636,21 @@ if [ -n "$CODEX_JSON" ] && echo "$CODEX_JSON" | jq -e '.available == true' >/dev
 
   CX_THR_LABEL="threads"; [ "$CX_TODAY_THR" = "1" ] && CX_THR_LABEL="thread"
   echo "CODEX · local, this machine | size=11 color=$LBL"
+  # Real quota gauge from Codex's own rate_limits (primary + optional secondary window).
+  CX_Q_PCT=$(echo "$CODEX_JSON" | jq -r '.quota.primary.used_percent // empty')
+  if [ -n "$CX_Q_PCT" ]; then
+    CX_Q_WIN=$(echo "$CODEX_JSON" | jq -r '.quota.primary.window // "weekly"')
+    CX_Q_RESET=$(echo "$CODEX_JSON" | jq -r '.quota.primary.resets_at // empty')
+    CX_Q_RESET_TXT=""
+    [ -n "$CX_Q_RESET" ] && CX_Q_RESET_TXT=$(fmt_resets_all "$(date -r "${CX_Q_RESET%.*}" +%Y-%m-%dT%H:%M:%S%z 2>/dev/null)")
+    print_metric "Quota · $CX_Q_WIN" "$CX_Q_PCT" "$CX_Q_RESET_TXT"
+    # Secondary window (e.g. a shorter burst limit) when Codex reports one.
+    CX_Q2_PCT=$(echo "$CODEX_JSON" | jq -r '.quota.secondary.used_percent // empty')
+    if [ -n "$CX_Q2_PCT" ]; then
+      CX_Q2_WIN=$(echo "$CODEX_JSON" | jq -r '.quota.secondary.window // "5h"')
+      print_metric "Quota · $CX_Q2_WIN" "$CX_Q2_PCT" ""
+    fi
+  fi
   echo "Today · $(humanize_tokens "$CX_TODAY_TOK") tokens · ${CX_TODAY_THR} ${CX_THR_LABEL} | size=12 color=$LBL"
   if [ -n "$CX_WOW" ]; then
     echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") ($CX_WOW vs prev) · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11 color=$LBL"

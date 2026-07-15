@@ -16,6 +16,7 @@ Output is JSON to stdout, mirrored to a warm summary file for fallback.
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import sqlite3
@@ -25,7 +26,9 @@ from pathlib import Path
 
 HOME = Path.home()
 DB_PATH = HOME / ".codex" / "state_5.sqlite"
+SESSIONS_GLOB = str(HOME / ".codex" / "sessions" / "**" / "rollout-*.jsonl")
 SUMMARY_PATH = HOME / ".claude-usage-codex-summary.json"
+TAIL_BYTES = 1_000_000   # only read the tail of the newest rollouts for the quota
 
 
 def local_day(epoch: int) -> str | None:
@@ -38,6 +41,91 @@ def local_day(epoch: int) -> str | None:
         return datetime.fromtimestamp(epoch).astimezone().strftime("%Y-%m-%d")
     except Exception:
         return None
+
+
+def _window_label(minutes) -> str:
+    if not minutes:
+        return ""
+    m = int(minutes)
+    if m == 10080:
+        return "weekly"
+    if m == 300:
+        return "5h"
+    if m % 1440 == 0:
+        return f"{m // 1440}d"
+    if m % 60 == 0:
+        return f"{m // 60}h"
+    return f"{m}m"
+
+
+def _find_rate_limits(obj):
+    """Recursively locate a rate_limits dict inside a decoded rollout record."""
+    if isinstance(obj, dict):
+        rl = obj.get("rate_limits")
+        if isinstance(rl, dict) and isinstance(rl.get("primary"), dict):
+            return rl
+        for v in obj.values():
+            found = _find_rate_limits(v)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = _find_rate_limits(v)
+            if found:
+                return found
+    return None
+
+
+def codex_quota() -> dict | None:
+    """Latest Codex rate-limit snapshot from the newest session rollout files.
+
+    Codex writes a rate_limits object (primary/secondary windows with
+    used_percent, window_minutes, resets_at) into each session rollout on every
+    API turn. We read only the tail of the few newest rollouts and take the last
+    snapshot, so it is both fresh and cheap. Returns None if none found.
+    """
+    files = glob.glob(SESSIONS_GLOB, recursive=True)
+    if not files:
+        return None
+    files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
+    for f in files[:3]:
+        try:
+            size = os.path.getsize(f)
+            with open(f, "rb") as fh:
+                if size > TAIL_BYTES:
+                    fh.seek(-TAIL_BYTES, os.SEEK_END)
+                data = fh.read().decode("utf-8", "ignore")
+            lines = data.split("\n")
+            if size > TAIL_BYTES:
+                lines = lines[1:]   # first line may be partial after the seek
+            for line in reversed(lines):
+                if "rate_limits" not in line:
+                    continue
+                try:
+                    o = json.loads(line)
+                except Exception:
+                    continue
+                rl = _find_rate_limits(o)
+                if not rl:
+                    continue
+
+                def window(w):
+                    if not isinstance(w, dict):
+                        return None
+                    return {
+                        "used_percent": w.get("used_percent"),
+                        "window": _window_label(w.get("window_minutes")),
+                        "resets_at": w.get("resets_at"),
+                    }
+
+                return {
+                    "primary": window(rl.get("primary")),
+                    "secondary": window(rl.get("secondary")),
+                    "plan_type": rl.get("plan_type"),
+                }
+        except Exception:
+            continue
+    return None
 
 
 def build_summary() -> dict:
@@ -104,6 +192,7 @@ def build_summary() -> dict:
         "month": month_b,
         "all_time": all_b,
         "daily": daily,
+        "quota": codex_quota(),   # real rate-limit gauge from the session rollouts
     }
 
 
