@@ -118,9 +118,12 @@ def _decrypt_value(encrypted: bytes, key: bytes, db_version: int) -> str | None:
     v10/v11 AES-CBC blob (e.g. app-bound v20 encryption, or a wrong key)."""
     if encrypted[:3] not in (b"v10", b"v11"):
         return None
+    body = encrypted[3:]
+    if not body or len(body) % 16:  # AES-CBC needs whole 16-byte blocks; a
+        return None                 # malformed cookie is skipped, not fatal
     cipher = Cipher(algorithms.AES(key), modes.CBC(b" " * 16))
     dec = cipher.decryptor()
-    raw = dec.update(encrypted[3:]) + dec.finalize()
+    raw = dec.update(body) + dec.finalize()
     if db_version >= 24:
         # Chrome cookie DB v24+ prepends a 32-byte SHA256 domain hash to the
         # plaintext (chromium sqlite_persistent_cookie_store.cc). Strip it.
