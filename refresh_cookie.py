@@ -17,12 +17,15 @@ import fcntl
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from pycookiecheat import chrome_cookies
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.hashes import SHA1
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 CONFIG_PATH = Path.home() / ".claude-usage-widget.conf"
 LOCK_PATH = Path.home() / ".claude-usage-widget.conf.lock"
@@ -34,7 +37,13 @@ NEEDED = ["sessionKey", "lastActiveOrg", "anthropic-device-id", "cf_clearance", 
 # usage API. Requiring cf_clearance here wrongly rejected logged-in users.
 REQUIRED = ["sessionKey"]
 HOME = Path.home()
-KEYCHAIN_TIMEOUT_SECONDS = 5
+# Generous by default so an interactive install waits for the user to read and
+# click the Keychain prompt (5s was too short - the call was killed before a
+# human could click, then mislabelled as "no keychain entry"). The launchd plist
+# sets a short value via CLAUDE_KEYCHAIN_TIMEOUT_SECONDS so the background refresh
+# never hangs on a prompt (which only appears when the key is not yet approved;
+# once the user clicks "Always Allow" it is granted silently forever).
+KEYCHAIN_TIMEOUT_SECONDS = float(os.environ.get("CLAUDE_KEYCHAIN_TIMEOUT_SECONDS", "90"))
 API_VALIDATION_TIMEOUT_SECONDS = 10
 
 BROWSERS = [
@@ -98,40 +107,97 @@ def candidates() -> list[tuple[str, str, Path, float]]:
     return found
 
 
-# Chromium's hard-coded fallback: when Chrome cannot store its Safe Storage key
-# in the macOS Keychain (managed or freshly-provisioned Macs, or no Keychain
-# access on first run), it encrypts cookies with the literal password "peanuts".
-# Such machines have no "<Browser> Safe Storage" Keychain entry at all, so the
-# Keychain lookup returns nothing - try peanuts too so they are not locked out.
-# Safe: a wrong password yields values that fail live API validation downstream.
-CHROMIUM_FALLBACK_PW = "peanuts"
+def _derive_key(key_material: str) -> bytes:
+    """PBKDF2-HMAC-SHA1 key derivation, matching Chromium's macOS cookie scheme."""
+    kdf = PBKDF2HMAC(algorithm=SHA1(), length=16, salt=b"saltysalt", iterations=1003)
+    return kdf.derive(key_material.encode("utf8"))
+
+
+def _decrypt_value(encrypted: bytes, key: bytes, db_version: int) -> str | None:
+    """Decrypt one Chromium cookie value, or None if it is not a decryptable
+    v10/v11 AES-CBC blob (e.g. app-bound v20 encryption, or a wrong key)."""
+    if encrypted[:3] not in (b"v10", b"v11"):
+        return None
+    cipher = Cipher(algorithms.AES(key), modes.CBC(b" " * 16))
+    dec = cipher.decryptor()
+    raw = dec.update(encrypted[3:]) + dec.finalize()
+    if db_version >= 24:
+        # Chrome cookie DB v24+ prepends a 32-byte SHA256 domain hash to the
+        # plaintext (chromium sqlite_persistent_cookie_store.cc). Strip it.
+        raw = raw[32:]
+    if not raw:
+        return None
+    pad = raw[-1]  # PKCS7 padding length
+    if pad < 1 or pad > 16 or pad > len(raw):
+        return None
+    try:
+        return raw[:-pad].decode("utf8")
+    except UnicodeDecodeError:
+        return None
+
+
+def extract_cookies(cookie_file: Path, key_material: str) -> dict:
+    """Decrypt this browser's claude.ai cookies using its Safe Storage key.
+
+    Self-contained (mirrors pycookiecheat's macOS scheme: PBKDF2-HMAC-SHA1, 1003
+    iterations, salt "saltysalt", AES-128-CBC, 16-space IV) so the widget touches
+    the Keychain exactly once - via the memoised `security` fetch, a single
+    Keychain subject - instead of pycookiecheat re-reading it as a *second*
+    subject (the venv Python binary) on every call. That double lookup, times
+    every browser profile, was the source of the repeated permission prompts.
+    """
+    key = _derive_key(key_material)
+    con = sqlite3.connect(f"file:{cookie_file}?mode=ro", uri=True)
+    con.text_factory = bytes  # values/blobs come back as bytes
+    try:
+        db_version = 0
+        row = con.execute("select value from meta where key='version'").fetchone()
+        if row and row[0] is not None:
+            try:
+                raw_v = row[0]
+                db_version = int(raw_v.decode() if isinstance(raw_v, bytes) else raw_v)
+            except (ValueError, TypeError, AttributeError):
+                db_version = 0
+        out: dict = {}
+        # host_key params must be str (TEXT affinity); results are bytes.
+        for host in ("claude.ai", ".claude.ai"):
+            for name_b, value_b, enc in con.execute(
+                "select name, value, encrypted_value from cookies where host_key = ?",
+                (host,),
+            ):
+                name = name_b.decode("utf8", "replace")
+                if value_b:  # already plaintext (rare)
+                    out[name] = value_b.decode("utf8", "replace")
+                elif enc:
+                    dv = _decrypt_value(enc, key, db_version)
+                    if dv is not None:
+                        out[name] = dv
+        return out
+    finally:
+        con.rollback()
+        con.close()
 
 
 def try_extract(service: str, cookie_file: Path):
     """Return (cookies_dict, None) on success or (None, reason_str) on failure.
 
-    Tries the Keychain Safe Storage key first, then the Chromium "peanuts"
-    fallback for machines where that key was never created.
+    Fetches the browser's Safe Storage key once from the Keychain (via the
+    memoised `security` helper - one Keychain subject, one prompt per browser)
+    and decrypts the cookie DB in-process. No second subject, no per-profile
+    prompts.
     """
     pw = keychain_password(service)
-    attempts: list[str] = []
-    for candidate_pw in [p for p in (pw, CHROMIUM_FALLBACK_PW) if p]:
-        try:
-            cookies = chrome_cookies(
-                "https://claude.ai/settings/usage",
-                cookie_file=str(cookie_file),
-                password=candidate_pw,
-            )
-        except Exception as e:
-            attempts.append(f"decrypt failed: {e}")
-            continue
-        if all(k in cookies for k in REQUIRED):
-            return cookies, None
-        attempts.append(f"missing required: {[k for k in REQUIRED if k not in cookies]}")
     if not pw:
-        return None, (f"no keychain entry for {service!r} and the Chromium "
-                      "'peanuts' fallback did not yield a session")
-    return None, "; ".join(attempts) or "extraction failed"
+        return None, (f"could not read the {service} key from the Keychain "
+                      "(approve the prompt with 'Always Allow', or the key is absent)")
+    try:
+        cookies = extract_cookies(cookie_file, pw)
+    except Exception as e:
+        return None, f"decrypt failed: {e}"
+    if all(k in cookies for k in REQUIRED):
+        return cookies, None
+    missing = [k for k in REQUIRED if k not in cookies]
+    return None, f"key OK but no Claude session in this profile (missing {missing})"
 
 
 def read_usage_url() -> str | None:
