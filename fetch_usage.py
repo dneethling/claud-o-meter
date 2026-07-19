@@ -49,14 +49,11 @@ def snippet(text: str) -> str:
     return text.replace("\n", " ").replace("\r", " ")[:SNIPPET_MAX]
 
 
-def main():
-    cfg = load_config()
-    url = cfg.get("USAGE_URL")
-    cookie = cfg.get("COOKIE")
-    if not url or not cookie or "PASTE" in url:
-        sys.stderr.write("Fill in USAGE_URL and COOKIE in the config.\n")
-        sys.exit(2)
-
+def fetch_usage_json(url: str, cookie: str):
+    """Fetch and validate the usage JSON. Returns (body_str, None) on success or
+    (None, error_str) on any failure — never raises, never exits. Shared by the
+    CLI `main()` (menu-bar widget) and `ios_relay.py` (the iOS push relay) so both
+    hit the endpoint exactly the same way (Chrome TLS fingerprint, same headers)."""
     headers = {
         "accept": "*/*",
         "anthropic-client-platform": "web_claude_ai",
@@ -73,26 +70,38 @@ def main():
             timeout=FETCH_TIMEOUT_SECONDS,
         )
     except Exception as e:
-        sys.stderr.write(f"fetch error: {e}\n")
-        sys.exit(1)
+        return None, f"fetch error: {e}"
 
     if resp.status_code != 200:
-        sys.stderr.write(f"HTTP {resp.status_code}: {snippet(resp.text)}\n")
-        sys.exit(1)
+        return None, f"HTTP {resp.status_code}: {snippet(resp.text)}"
 
-    # Validate JSON before letting the body reach stdout. A 200 with Cloudflare
+    # Validate JSON before letting the body reach a caller. A 200 with Cloudflare
     # HTML or an Anthropic error envelope still needs to be treated as a failure.
     try:
         body = json.loads(resp.text)
     except json.JSONDecodeError as e:
-        sys.stderr.write(f"Non-JSON 200 response ({e}): {snippet(resp.text)}\n")
-        sys.exit(1)
+        return None, f"Non-JSON 200 response ({e}): {snippet(resp.text)}"
 
     if isinstance(body, dict) and body.get("type") == "error":
-        sys.stderr.write(f"API error envelope: {snippet(resp.text)}\n")
+        return None, f"API error envelope: {snippet(resp.text)}"
+
+    return resp.text, None
+
+
+def main():
+    cfg = load_config()
+    url = cfg.get("USAGE_URL")
+    cookie = cfg.get("COOKIE")
+    if not url or not cookie or "PASTE" in url:
+        sys.stderr.write("Fill in USAGE_URL and COOKIE in the config.\n")
+        sys.exit(2)
+
+    body, err = fetch_usage_json(url, cookie)
+    if body is None:
+        sys.stderr.write(f"{err}\n")
         sys.exit(1)
 
-    sys.stdout.write(resp.text)
+    sys.stdout.write(body)
 
 
 if __name__ == "__main__":
