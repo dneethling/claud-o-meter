@@ -23,37 +23,54 @@ ENDPOINTS = {
 }
 
 
-def classify(body: dict) -> str:
-    """Map a Statuspage status.json body to operational/incident/unknown."""
+def classify(body: dict) -> tuple[str, str]:
+    """Map a Statuspage status.json body to (level, description).
+
+    level is operational | degraded | incident | unknown:
+      none             -> operational
+      minor            -> degraded  (elevated errors / partial degradation - a
+                                     state Statuspage sits in a lot; not an outage)
+      major | critical -> incident  (a real outage worth interrupting you for)
+
+    Separating minor from major is what stops the menu bar warning firing for
+    routine background degradation. The caller decides how each level is shown.
+    """
     try:
         indicator = body["status"]["indicator"]
-    except (KeyError, TypeError):
-        return "unknown"
+        desc = (body["status"].get("description") or "").strip()
+    except (KeyError, TypeError, AttributeError):
+        return "unknown", ""
     if indicator == "none":
-        return "operational"
-    if indicator in ("minor", "major", "critical"):
-        return "incident"
-    return "unknown"
+        return "operational", desc
+    if indicator == "minor":
+        return "degraded", desc
+    if indicator in ("major", "critical"):
+        return "incident", desc
+    return "unknown", desc
 
 
-def fetch(url: str) -> str:
+def fetch(url: str) -> tuple[str, str]:
     from curl_cffi import requests
     resp = requests.get(url, impersonate="chrome", timeout=TIMEOUT_SECONDS)
     if resp.status_code != 200:
-        return "unknown"
+        return "unknown", ""
     try:
         return classify(json.loads(resp.text))
     except Exception:
-        return "unknown"
+        return "unknown", ""
 
 
 def build() -> dict:
+    # Keep the vendor keys as plain level strings (backward compatible), and add
+    # a "<vendor>_desc" with Statuspage's own summary for the dropdown line.
     result = {"generated_at": time.time()}
     for name, url in ENDPOINTS.items():
         try:
-            result[name] = fetch(url)
+            level, desc = fetch(url)
         except Exception:
-            result[name] = "unknown"
+            level, desc = "unknown", ""
+        result[name] = level
+        result[name + "_desc"] = desc
     return result
 
 

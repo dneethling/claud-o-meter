@@ -613,15 +613,43 @@ else
   fi
 fi
 
-# Provider status: dim + badge the icon if a vendor reports an incident.
-# Applies to both credit and normal modes (this runs after the if/else).
+# Provider status. Only a real outage takes over the menu-bar icon; routine
+# degradation gets a quiet dropdown line. Statuspage sits at "minor" (elevated
+# errors, one degraded model, partial degradation) a large fraction of the time,
+# so treating minor as an outage kept the warning triangle permanently on.
+#   incident  = Statuspage major/critical -> menu-bar takeover
+#   degraded  = Statuspage minor          -> quiet dropdown line only
+# STATUS_ALERT in the config tunes this: major (default) | minor (degraded also
+# takes over) | off (no status surfacing at all).
+STATUS_ALERT=$(grep -E '^STATUS_ALERT=' "$CONFIG" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ')
+[ -z "$STATUS_ALERT" ] && STATUS_ALERT="major"
+
 STATUS_JSON=$(run_timeout 7 "$PYTHON" "$STATUS_CHECK" 2>/dev/null)
-INCIDENT=""
-if [ -n "$STATUS_JSON" ]; then
+INCIDENT=""      # drives the menu-bar takeover (real outage)
+STATUS_NOTE=""   # quiet dropdown line for below-threshold degradation
+if [ "$STATUS_ALERT" != "off" ] && [ -n "$STATUS_JSON" ]; then
   A_ST=$(echo "$STATUS_JSON" | jq -r '.anthropic // "unknown"')
   O_ST=$(echo "$STATUS_JSON" | jq -r '.openai // "unknown"')
-  [ "$A_ST" = "incident" ] && INCIDENT="Claude"
-  [ "$O_ST" = "incident" ] && INCIDENT="${INCIDENT:+$INCIDENT + }OpenAI"
+  A_DESC=$(echo "$STATUS_JSON" | jq -r '.anthropic_desc // ""')
+  O_DESC=$(echo "$STATUS_JSON" | jq -r '.openai_desc // ""')
+  # These strings come from an external status page and are emitted into the
+  # "text | key=value" SwiftBar row, so a stray "|" or newline would let the
+  # description inject its own row parameters. Strip them defensively.
+  A_DESC=${A_DESC//|/ }; A_DESC=${A_DESC//$'\n'/ }; A_DESC=${A_DESC//$'\r'/ }
+  O_DESC=${O_DESC//|/ }; O_DESC=${O_DESC//$'\n'/ }; O_DESC=${O_DESC//$'\r'/ }
+  # An outage always takes over; minor degradation only when opted in.
+  A_TAKE=0; O_TAKE=0
+  [ "$A_ST" = "incident" ] && A_TAKE=1
+  [ "$O_ST" = "incident" ] && O_TAKE=1
+  [ "$STATUS_ALERT" = "minor" ] && [ "$A_ST" = "degraded" ] && A_TAKE=1
+  [ "$STATUS_ALERT" = "minor" ] && [ "$O_ST" = "degraded" ] && O_TAKE=1
+  [ "$A_TAKE" = 1 ] && INCIDENT="Claude"
+  [ "$O_TAKE" = 1 ] && INCIDENT="${INCIDENT:+$INCIDENT + }OpenAI"
+  # Below-threshold degradation still worth a quiet, non-alarming line.
+  [ "$A_TAKE" = 0 ] && { [ "$A_ST" = "degraded" ] || [ "$A_ST" = "incident" ]; } \
+    && STATUS_NOTE="Claude: ${A_DESC:-degraded service}"
+  [ "$O_TAKE" = 0 ] && { [ "$O_ST" = "degraded" ] || [ "$O_ST" = "incident" ]; } \
+    && STATUS_NOTE="${STATUS_NOTE:+$STATUS_NOTE · }OpenAI: ${O_DESC:-degraded service}"
 fi
 if [ -n "$INCIDENT" ]; then
   ICON="sfimage=exclamationmark.triangle.fill"
@@ -635,7 +663,11 @@ echo "Claude Usage Dashboard | href=https://claude.ai/settings/usage size=14"
 echo "---"
 
 if [ -n "$INCIDENT" ]; then
-  echo "⚠ ${INCIDENT} reporting an incident | color=#FF9500 href=https://status.anthropic.com"
+  echo "⚠ ${INCIDENT} reporting an outage | color=#FF9500 href=https://status.anthropic.com"
+  echo "---"
+elif [ -n "$STATUS_NOTE" ]; then
+  # Muted, informational - no scary triangle, just a heads-up if you open the menu.
+  echo "$STATUS_NOTE | size=11 color=$LBL href=https://status.anthropic.com"
   echo "---"
 fi
 
