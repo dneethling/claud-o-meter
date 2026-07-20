@@ -67,7 +67,42 @@ PRICING = {
     "3-5-haiku":  {"in":  0.80, "out":  4.00, "cache_write":  1.00, "cache_read": 0.08},
     "haiku":      {"in":  1.00, "out":  5.00, "cache_write":  1.25, "cache_read": 0.10},
 }
-DEFAULT_PRICE = PRICING["sonnet"]
+# check_pricing.py refreshes rates from Anthropic's published table into a local
+# override. Prefer it when present and structurally sound, so a price change is
+# picked up without a code edit; fall back to the reviewed table above whenever
+# the override is missing, malformed, or fails the same sanity checks the
+# updater applies. A stale-but-correct table beats a fresh-but-broken one.
+_OVERRIDE_PATH = Path.home() / ".claude-usage-pricing.json"
+
+
+def _load_override() -> dict | None:
+    try:
+        d = json.loads(_OVERRIDE_PATH.read_text())
+    except Exception:
+        return None
+    table = d.get("pricing")
+    if not isinstance(table, dict) or len(table) < 5:
+        return None
+    for r in table.values():
+        if not isinstance(r, dict):
+            return None
+        for f in ("in", "out", "cache_write", "cache_read"):
+            v = r.get(f)
+            if not isinstance(v, (int, float)) or not (0 < v <= 1000):
+                return None
+        if r["out"] <= r["in"]:
+            return None
+    order = d.get("key_order")
+    if isinstance(order, list) and all(k in table for k in order):
+        return {k: table[k] for k in order}     # matching is order-sensitive
+    return table
+
+
+_OV = _load_override()
+if _OV:
+    PRICING = _OV
+DEFAULT_PRICE = PRICING.get("sonnet", {"in": 3.0, "out": 15.0,
+                                       "cache_write": 3.75, "cache_read": 0.30})
 
 
 def price_for(model: str) -> dict:

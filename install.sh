@@ -72,6 +72,31 @@ PL
 launchctl unload "$PLIST" 2>/dev/null || true
 launchctl load "$PLIST" 2>/dev/null || true
 
+# 6b. Weekly API-rate refresh. Anthropic changes prices periodically and a stale
+# table silently misreports the "value extracted" figure (Opus once drifted to
+# more than double). This only ever writes a validated local override, never the
+# repo, so a bad scrape cannot reach anyone else's install.
+PPLIST="$HOME/Library/LaunchAgents/com.claudometer.pricing.plist"
+cat > "$PPLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.claudometer.pricing</string>
+  <key>ProgramArguments</key><array>
+    <string>$DIR/.venv/bin/python</string>
+    <string>$DIR/check_pricing.py</string>
+  </array>
+  <key>StartInterval</key><integer>604800</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardErrorPath</key><string>/tmp/claude-usage-pricing.err</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>HOME</key><string>$HOME</string>
+  </dict>
+</dict></plist>
+PL
+launchctl unload "$PPLIST" 2>/dev/null || true
+launchctl load "$PPLIST" 2>/dev/null || true
+
 # 7. Prime the update-status cache and launch.
 bash "$DIR/check_update.sh" >/dev/null 2>&1 || true
 open -a SwiftBar 2>/dev/null || true

@@ -37,6 +37,8 @@ EXPORT="$WIDGET_DIR/export_usage.py"
 CHECK_UPDATE="$WIDGET_DIR/check_update.sh"
 UPDATE_SCRIPT="$WIDGET_DIR/update.sh"
 UPDATE_STATUS="$HOME/.claude-usage-update-status"
+CHECK_PRICING="$WIDGET_DIR/check_pricing.py"
+PRICING_STATUS="$HOME/.claude-usage-pricing-status.json"
 UPDATE_CHECK_INTERVAL=21600   # re-check GitHub at most every 6h (in background)
 REPO_URL="https://github.com/dneethling/claud-o-meter"
 RESET_DROP=30                                # a fall of this many points = a reset (clear-to-go ping)
@@ -875,6 +877,23 @@ echo "-----"
 echo "-- Check for updates | bash='/bin/bash' param1='$CHECK_UPDATE' terminal=false refresh=true"
 echo "-- View on GitHub | href=$REPO_URL"
 echo "-- Build $UPD_SHA | color=$LBL"
+# API rates refresh themselves from Anthropic's published table. A checker that
+# silently stops working looks exactly like "no price changes", so show the last
+# result rather than letting it rot unnoticed.
+if [ -f "$PRICING_STATUS" ]; then
+  PR_OK=$(jq -r '.ok // false' "$PRICING_STATUS" 2>/dev/null)
+  PR_DAY=$(jq -r '.checked_at // ""' "$PRICING_STATUS" 2>/dev/null | cut -dT -f1)
+  if [ "$PR_OK" = "true" ]; then
+    echo "-- Rates checked $PR_DAY | color=$LBL"
+  else
+    PR_WHY=$(jq -r '.detail // "unknown"' "$PRICING_STATUS" 2>/dev/null | cut -c1-60)
+    echo "-- ⚠ Rate check failing: $PR_WHY | color=#FF9500"
+  fi
+fi
+# Only offer the action if the checker is actually present - a partial update
+# would otherwise leave a menu item that does nothing when clicked.
+[ -f "$CHECK_PRICING" ] && \
+  echo "-- Check rates now | bash='$PYTHON' param1='$CHECK_PRICING' terminal=false refresh=true"
 
 # "Up to date" is not news, so it stays in the submenu. Only surface an update
 # at top level, where it is something you can actually act on.
