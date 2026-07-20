@@ -67,9 +67,19 @@ CRIT_PCT=85
 # syntax, which if unsupported would render near-black on a dark menu).
 if defaults read -g AppleInterfaceStyle 2>/dev/null | grep -qi dark; then
   LBL="#f2f2f7"   # near-white for dark appearance
+  DARKJSON="true" # drawn meters need a lighter track on a dark menu
+  SEC_CC="#8F8CFF"  # Claude Code section: indigo
+  SEC_CX="#3ED9D3"  # Codex section: teal
 else
   LBL="#1c1c1e"   # near-black for light appearance
+  DARKJSON="false"
+  SEC_CC="#5E5CE6"
+  SEC_CX="#0E9F9A"
 fi
+# Section hues are deliberately clear of the semantic green/orange/red used for
+# gauge state, so a coloured heading can never be misread as a status. Each
+# section's sparkline is drawn in its own hue, which is what ties a graph to the
+# heading above it.
 
 # Menu-bar title mode. Override by adding a MENUBAR_MODE=... line to the config.
 #   claude (default) -> "16% · 10%w"
@@ -83,6 +93,88 @@ MENUBAR_MODE=$(grep -E '^MENUBAR_MODE=' "$CONFIG" 2>/dev/null | head -1 | cut -d
 THEME=$(grep -E '^THEME=' "$CONFIG" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ')
 [ -z "$THEME" ] && THEME="semantic"
 export THEME
+
+# Drawn meters (real PNGs) instead of ASCII bars. Add GRAPHICS=0 to the config to
+# fall back to text bars. Rendering is pure-Python with no dependencies, and every
+# failure path falls back to the ASCII bar, so this can never blank a gauge.
+GRAPHICS=$(grep -E '^GRAPHICS=' "$CONFIG" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ')
+[ -z "$GRAPHICS" ] && GRAPHICS="1"
+METER_CACHE="$HOME/.cache/claude-usage-widget/meters"
+[ "$GRAPHICS" = "1" ] && mkdir -p "$METER_CACHE" 2>/dev/null
+
+# Base64 PNG for one meter, cached on disk by (appearance, colour, percent).
+# Percentages are integers 0-100 so the cache saturates almost immediately and
+# steady-state refreshes do no rendering work at all.
+meter_b64() {
+  local pint="$1" clr="$2" f tmp frac img
+  [ "$GRAPHICS" = "1" ] || return 0
+  [ -x "$PYTHON" ] || return 0
+  f="$METER_CACHE/m-${DARKJSON}-${clr#\#}-${pint}.b64"
+  if [ ! -s "$f" ]; then
+    frac=$(awk -v p="$pint" 'BEGIN{printf "%.4f", p/100}')
+    # PID-unique temp: two refreshes rendering the same key must not delete
+    # each other's in-progress file. Rename is atomic, so readers see all-or-nothing.
+    tmp="$f.$$.tmp"
+    printf '[{"key":"m","type":"meter","frac":%s,"color":"%s","dark":%s,"w":54,"h":7}]' \
+      "$frac" "$clr" "$DARKJSON" \
+      | run_timeout 6 "$PYTHON" "$WIDGET_DIR/render_assets.py" 2>/dev/null \
+      | awk -F'\t' 'NR==1{print $2}' > "$tmp" 2>/dev/null
+    if [ -s "$tmp" ]; then mv -f "$tmp" "$f" 2>/dev/null; else rm -f "$tmp" 2>/dev/null; fi
+  fi
+  [ -s "$f" ] || return 0
+  img=$(cat "$f" 2>/dev/null)
+  # Never trust the cache blindly: a truncated, hand-edited or disk-corrupted
+  # file containing a space, "|" or newline would break SwiftBar's
+  # "text | key=value" row protocol and mangle the whole menu. Emit only a
+  # single run of strict base64 of a sane length; anything else falls back to
+  # the ASCII bar.
+  case "$img" in
+    ""|*[!A-Za-z0-9+/=]*) return 0 ;;
+  esac
+  [ ${#img} -gt 50000 ] && return 0
+  printf '%s' "$img"
+}
+
+# Base64 PNG for a sparkline, keyed by a hash of its own values. Unlike meters
+# (a bounded set of 101 percentages) trend data drifts every refresh, so these
+# entries would accumulate - prune anything untouched for 3 days on each run.
+[ "$GRAPHICS" = "1" ] && find "$METER_CACHE" -name 's-*.b64' -mtime +3 -delete 2>/dev/null
+spark_b64() {
+  local vals="$1" clr="$2" f tmp json key img
+  [ "$GRAPHICS" = "1" ] || return 0
+  [ -x "$PYTHON" ] || return 0
+  [ -z "$vals" ] && return 0
+  key=$(printf '%s' "${vals}${clr}${DARKJSON}" | shasum 2>/dev/null | cut -c1-16)
+  [ -z "$key" ] && return 0
+  f="$METER_CACHE/s-$key.b64"
+  if [ ! -s "$f" ]; then
+    # space-separated numbers -> JSON array. Anything non-numeric coerces to 0,
+    # and non-finite values are forced to 0 too: awk turns "1e999" into "inf"
+    # and "NaN" into "nan", neither of which is valid JSON, which would make the
+    # renderer reject the whole spec.
+    json=$(printf '%s' "$vals" | awk '{
+      for (i=1;i<=NF;i++) {
+        v = $i + 0
+        if (v != v || v == v + 1) v = 0   # NaN, +inf, -inf
+        printf (i>1 ? "," : "") "%.6g", v
+      }
+    }')
+    [ -z "$json" ] && return 0
+    tmp="$f.$$.tmp"
+    printf '[{"key":"s","type":"spark","values":[%s],"color":"%s","dark":%s,"w":104,"h":15}]' \
+      "$json" "$clr" "$DARKJSON" \
+      | run_timeout 6 "$PYTHON" "$WIDGET_DIR/render_assets.py" 2>/dev/null \
+      | awk -F'\t' 'NR==1{print $2}' > "$tmp" 2>/dev/null
+    if [ -s "$tmp" ]; then mv -f "$tmp" "$f" 2>/dev/null; else rm -f "$tmp" 2>/dev/null; fi
+  fi
+  [ -s "$f" ] || return 0
+  img=$(cat "$f" 2>/dev/null)
+  case "$img" in
+    ""|*[!A-Za-z0-9+/=]*) return 0 ;;
+  esac
+  [ ${#img} -gt 50000 ] && return 0
+  printf '%s' "$img"
+}
 
 # Pure display/formatting helpers (color_for_pct, progress_bar, round,
 # humanize_tokens, humanize_usd, format_money, sparkline) live in lib/format.sh
@@ -115,16 +207,23 @@ run_timeout() {
 print_metric() {
   local label="$1" pct="$2" reset="$3"
   [ -z "$pct" ] && return
-  local pint clr bar info
+  local pint clr bar info img
   pint=$(round "$pct")
   clr=$(color_for_pct "$pint")
-  bar=$(progress_bar "$pint")
   info="$label · ${pint}%"
   [ -n "$reset" ] && info="$info · resets $reset"
-  # No color= on the text line → SwiftBar uses the adaptive system label
-  # color (white in dark mode, black in light mode). Always readable.
-  echo "$info | size=12 color=$LBL"
-  echo "$bar | font=Menlo size=12 $(colorkey "$clr")"
+  # A drawn meter rides on the metric row itself (SwiftBar renders a row image
+  # leading the text), collapsing what used to be a text row plus an ASCII bar
+  # row into one. If rendering is off or fails for any reason we fall back to
+  # the original two-row text form, so a gauge is never lost.
+  img=$(meter_b64 "$pint" "$clr")
+  if [ -n "$img" ]; then
+    echo "$info | size=12 color=$LBL image=$img"
+  else
+    bar=$(progress_bar "$pint")
+    echo "$info | size=12 color=$LBL"
+    echo "$bar | font=Menlo size=12 $(colorkey "$clr")"
+  fi
 }
 
 # Format every ISO timestamp passed as argv into a one-line "in 1h 14m" / "mon 3:00pm"
@@ -502,6 +601,11 @@ if [ -n "$INCIDENT" ]; then
   echo "---"
 fi
 
+# Heading for the account-limit gauges, so all three sections are labelled the
+# same way. Left in the neutral label colour: the gauges under it are already
+# colour-coded by state, and a coloured heading here would compete with them.
+echo "CLAUDE · account limits | size=12 color=$LBL sfimage=cloud.fill"
+
 # Credits block: only when actually on credits — shown FIRST since it's what
 # the user is actively burning down right now.
 if [ $ON_CREDITS -eq 1 ]; then
@@ -518,7 +622,12 @@ if [ -n "$SESSION" ]; then
   if [ -f "$HISTORY_FILE" ]; then
     SESSION_TREND=$(tail -n 24 "$HISTORY_FILE" 2>/dev/null | awk '{printf "%s ", $2}')
     SPARK=$(sparkline "$SESSION_TREND")
-    [ -n "$SPARK" ] && echo "  trend (last ~2h) $SPARK | font=Menlo size=13 $(colorkey "$(color_for_pct "$S_I")")"
+    S_IMG=$(spark_b64 "$SESSION_TREND" "$(color_for_pct "$S_I")")
+    if [ -n "$S_IMG" ]; then
+      echo "  trend · last 2h | size=11 color=$LBL image=$S_IMG"
+    elif [ -n "$SPARK" ]; then
+      echo "  trend (last ~2h) $SPARK | font=Menlo size=13 $(colorkey "$(color_for_pct "$S_I")")"
+    fi
   fi
   echo "---"
 fi
@@ -607,7 +716,7 @@ EOF
   # 7-day daily token sparkline
   CC_SPARK=$(sparkline "$(echo "$CC_JSON" | jq -r '.daily | join(" ")' 2>/dev/null)")
 
-  echo "CLAUDE CODE · local, this machine | size=11 color=$LBL"
+  echo "CLAUDE CODE | size=12 color=$SEC_CC sfimage=chevron.left.forwardslash.chevron.right"
   echo "Today · $(humanize_tokens "$CC_TODAY_TOK") tokens · ≈$(humanize_usd "$CC_TODAY_USD") value | size=12 color=$LBL"
   [ -n "$CC_MODEL_PARTS" ] && echo "  by model · $CC_MODEL_PARTS | size=11 color=$LBL"
   if [ -n "$CC_WOW" ]; then
@@ -615,7 +724,12 @@ EOF
   else
     echo "7 days · $(humanize_tokens "$CC_WEEK_TOK") · 30 days · $(humanize_tokens "$CC_MONTH_TOK") | size=11 color=$LBL"
   fi
-  [ -n "$CC_SPARK" ] && echo "  7-day trend $CC_SPARK | font=Menlo size=11 color=$LBL"
+  CC_IMG=$(spark_b64 "$(echo "$CC_JSON" | jq -r '.daily | join(" ")' 2>/dev/null)" "$SEC_CC")
+  if [ -n "$CC_IMG" ]; then
+    echo "  7-day trend | size=11 color=$LBL image=$CC_IMG"
+  elif [ -n "$CC_SPARK" ]; then
+    echo "  7-day trend $CC_SPARK | font=Menlo size=11 color=$LBL"
+  fi
   echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11 color=$LBL"
   echo "---"
 fi
@@ -646,7 +760,7 @@ if [ -n "$CODEX_JSON" ] && echo "$CODEX_JSON" | jq -e '.available == true' >/dev
   CX_SPARK=$(sparkline "$(echo "$CODEX_JSON" | jq -r '.daily | join(" ")' 2>/dev/null)")
 
   CX_THR_LABEL="threads"; [ "$CX_TODAY_THR" = "1" ] && CX_THR_LABEL="thread"
-  echo "CODEX · local, this machine | size=11 color=$LBL"
+  echo "CODEX | size=12 color=$SEC_CX sfimage=curlybraces"
   # Real quota gauge from Codex's own rate_limits (primary + optional secondary window).
   CX_Q_PCT=$(echo "$CODEX_JSON" | jq -r '.quota.primary.used_percent // empty')
   if [ -n "$CX_Q_PCT" ]; then
@@ -668,15 +782,20 @@ if [ -n "$CODEX_JSON" ] && echo "$CODEX_JSON" | jq -e '.available == true' >/dev
   else
     echo "7 days · $(humanize_tokens "$CX_WEEK_TOK") · 30 days · $(humanize_tokens "$CX_MONTH_TOK") · all-time · $(humanize_tokens "$CX_ALL_TOK") | size=11 color=$LBL"
   fi
-  [ -n "$CX_SPARK" ] && echo "  7-day trend $CX_SPARK | font=Menlo size=11 color=$LBL"
+  CX_IMG=$(spark_b64 "$(echo "$CODEX_JSON" | jq -r '.daily | join(" ")' 2>/dev/null)" "$SEC_CX")
+  if [ -n "$CX_IMG" ]; then
+    echo "  7-day trend | size=11 color=$LBL image=$CX_IMG"
+  elif [ -n "$CX_SPARK" ]; then
+    echo "  7-day trend $CX_SPARK | font=Menlo size=11 color=$LBL"
+  fi
   echo "---"
 fi
 
 # Footer
 echo "---"
 echo "↻ Refresh now | refresh=true sfimage=arrow.clockwise"
-echo "Copy status to clipboard | bash='/bin/bash' param1='-c' param2='\"$PYTHON\" \"$COPY_SUMMARY\" | pbcopy' terminal=false sfimage=doc.on.clipboard"
-echo "Export usage (7 days) | sfimage=square.and.arrow.up"
+echo "Copy status | bash='/bin/bash' param1='-c' param2='\"$PYTHON\" \"$COPY_SUMMARY\" | pbcopy' terminal=false sfimage=doc.on.clipboard"
+echo "Export usage | sfimage=square.and.arrow.up"
 echo "-- as CSV | bash='$PYTHON' param1='$EXPORT' param2='csv' terminal=false"
 echo "-- as JSON | bash='$PYTHON' param1='$EXPORT' param2='json' terminal=false"
 
@@ -691,14 +810,10 @@ echo "-- Mute 1 hour | bash='/bin/bash' param1='-c' param2='echo \$(( \$(date +%
 echo "-- Mute until tomorrow 9am | bash='/bin/bash' param1='-c' param2='echo \$(date -j -f %Y-%m-%d-%H:%M:%S \"\$(date -v+1d +%Y-%m-%d)-09:00:00\" +%s) > \"$MUTE_FILE\"' terminal=false refresh=true"
 echo "-- Unmute | bash='/bin/rm' param1='-f' param2='$MUTE_FILE' terminal=false refresh=true"
 
-echo "Open settings | href=https://claude.ai/settings/usage sfimage=gear"
-echo "Edit config | bash='/usr/bin/open' param1='-t' param2='$CONFIG' terminal=false sfimage=pencil"
-echo "View raw JSON | bash='/usr/bin/open' param1='-t' param2='$RAW' terminal=false sfimage=doc.text"
-echo "View error log | bash='/usr/bin/open' param1='-t' param2='$ERR_LOG' terminal=false sfimage=exclamationmark.bubble"
-
 # --- Updates -----------------------------------------------------------------
 # Read the cached update status (instant); refresh it in the background if stale
-# so we never block the render on a network git fetch.
+# so we never block the render on a network git fetch. Computed before the menu
+# below so the submenu can show the current build.
 UPD_BEHIND=0; UPD_SHA="?"; UPD_TS=0
 if [ -f "$UPDATE_STATUS" ]; then
   read -r UPD_BEHIND UPD_SHA UPD_TS < "$UPDATE_STATUS"
@@ -706,14 +821,26 @@ fi
 if [ ! -f "$UPDATE_STATUS" ] || { [ -n "$UPD_TS" ] && [ $(( $(date +%s) - UPD_TS )) -gt "$UPDATE_CHECK_INTERVAL" ]; } 2>/dev/null; then
   ( bash "$CHECK_UPDATE" >/dev/null 2>&1 & )
 fi
-echo "---"
+
+# Settings, config, logs and update controls are things you touch a couple of
+# times a year, so they no longer sit in the same space as the numbers you read
+# every day. One "More" submenu holds the lot.
+echo "More | sfimage=ellipsis.circle"
+echo "-- Open settings | href=https://claude.ai/settings/usage"
+echo "-- Edit config | bash='/usr/bin/open' param1='-t' param2='$CONFIG' terminal=false"
+echo "-- Force cookie refresh | bash='$PYTHON' param1='$REFRESHER' terminal=false refresh=true"
+echo "-----"
+echo "-- View raw JSON | bash='/usr/bin/open' param1='-t' param2='$RAW' terminal=false"
+echo "-- View error log | bash='/usr/bin/open' param1='-t' param2='$ERR_LOG' terminal=false"
+echo "-----"
+echo "-- Check for updates | bash='/bin/bash' param1='$CHECK_UPDATE' terminal=false refresh=true"
+echo "-- View on GitHub | href=$REPO_URL"
+echo "-- Build $UPD_SHA | color=$LBL"
+
+# "Up to date" is not news, so it stays in the submenu. Only surface an update
+# at top level, where it is something you can actually act on.
 if [ "${UPD_BEHIND:-0}" -gt 0 ] 2>/dev/null; then
+  echo "---"
   echo "⬆ Update available ($UPD_BEHIND new) | color=#FF9500 sfimage=arrow.down.circle.fill"
   echo "Update now | bash='/bin/bash' param1='$UPDATE_SCRIPT' terminal=false refresh=true sfimage=arrow.down.circle"
-else
-  echo "Up to date (build $UPD_SHA) | color=$LBL sfimage=checkmark.seal"
 fi
-echo "Check for updates | bash='/bin/bash' param1='$CHECK_UPDATE' terminal=false refresh=true sfimage=arrow.triangle.2.circlepath"
-echo "View on GitHub | href=$REPO_URL sfimage=chevron.left.forwardslash.chevron.right"
-echo "---"
-echo "Force cookie refresh | bash='$PYTHON' param1='$REFRESHER' terminal=false refresh=true sfimage=key.fill"
