@@ -35,19 +35,43 @@ SUMMARY_PATH = HOME / ".claude-usage-cc-summary.json"
 SCAN_WINDOW_DAYS = 35
 CACHE_VERSION = 4
 
-# API-equivalent pricing, USD per 1M tokens. These are ESTIMATES for the
-# "value from your subscription" figure only — edit to taste. Verify current
-# numbers at https://claude.com/pricing (Anthropic changes them periodically).
-# Keys are matched as substrings against message.model (lowercased).
+# API-equivalent pricing, USD per 1M tokens, for the "value from your
+# subscription" figure. Verified 2026-07-20 against Anthropic's published rates:
+# https://platform.claude.com/docs/en/about-claude/pricing
+#
+# Keys are matched as substrings against message.model (lowercased) IN ORDER, so
+# more specific keys must come first: "opus-4-1" before "opus", "sonnet-5"
+# before "sonnet". This matters because rates are not uniform across a family -
+# Opus dropped from $15/$75 to $5/$25 at 4.5, and pricing "opus" as a single
+# rate overstated the figure roughly threefold.
+#
+# Cache columns follow Anthropic's documented multipliers: 5-minute cache write
+# is 1.25x base input, cache read is 0.1x base input. (A 1-hour cache write is
+# 2x, which we do not model - Claude Code uses the 5-minute cache.)
 PRICING = {
-    "opus":   {"in": 15.00, "out": 75.00, "cache_write": 18.75, "cache_read": 1.50},
-    "sonnet": {"in": 3.00,  "out": 15.00, "cache_write": 3.75,  "cache_read": 0.30},
-    "haiku":  {"in": 1.00,  "out": 5.00,  "cache_write": 1.25,  "cache_read": 0.10},
+    "fable":      {"in": 10.00, "out": 50.00, "cache_write": 12.50, "cache_read": 1.00},
+    "mythos":     {"in": 10.00, "out": 50.00, "cache_write": 12.50, "cache_read": 1.00},
+    # Opus 4.1 and Opus 4 are deprecated/retired and kept the older, higher rates.
+    # Their real ids are date-stamped ("claude-opus-4-1-20250805",
+    # "claude-opus-4-20250514"), so match the date run - "opus-4-202" cannot
+    # collide with "opus-4-5" through "opus-4-8", which are on the newer rate.
+    "opus-4-1":   {"in": 15.00, "out": 75.00, "cache_write": 18.75, "cache_read": 1.50},
+    "opus-4-202": {"in": 15.00, "out": 75.00, "cache_write": 18.75, "cache_read": 1.50},
+    "opus":       {"in":  5.00, "out": 25.00, "cache_write":  6.25, "cache_read": 0.50},
+    # Sonnet 5 introductory pricing runs to 31 Aug 2026, after which it becomes
+    # $3/$15 like the other Sonnets - move this line then.
+    "sonnet-5":   {"in":  2.00, "out": 10.00, "cache_write":  2.50, "cache_read": 0.20},
+    "sonnet":     {"in":  3.00, "out": 15.00, "cache_write":  3.75, "cache_read": 0.30},
+    # Haiku 3.5 is retired on a lower rate than Haiku 4.5; its id leads with the
+    # version ("claude-3-5-haiku-20241022") so it must be matched before "haiku".
+    "3-5-haiku":  {"in":  0.80, "out":  4.00, "cache_write":  1.00, "cache_read": 0.08},
+    "haiku":      {"in":  1.00, "out":  5.00, "cache_write":  1.25, "cache_read": 0.10},
 }
 DEFAULT_PRICE = PRICING["sonnet"]
 
 
 def price_for(model: str) -> dict:
+    """Rate table for a model string. Order-sensitive: see PRICING."""
     m = (model or "").lower()
     for key, tbl in PRICING.items():
         if key in m:

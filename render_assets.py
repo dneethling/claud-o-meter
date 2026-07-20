@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import struct
 import sys
 import zlib
@@ -139,6 +140,55 @@ def meter_rows(frac: float, color: str, dark: bool, w_pt: int = 74, h_pt: int = 
     return w, h, rows
 
 
+# ------------------------------------------------------------------------- ring
+
+def ring(frac: float, colour: str, dark: bool, d_pt: int = 14,
+         thick_pt: float = 2.6) -> bytes:
+    w, h, rows = ring_rows(frac, colour, dark, d_pt, thick_pt)
+    return _png(w, h, rows)
+
+
+def ring_rows(frac: float, colour: str, dark: bool, d_pt: int = 14,
+              thick_pt: float = 2.6):
+    """Donut gauge filling clockwise from 12 o'clock, for the menu bar.
+
+    Square and compact, and it speaks the language macOS already uses for
+    capacity (battery, Activity Monitor), so it reads as native rather than
+    as a bar bolted into the menu bar.
+    """
+    frac = max(0.0, min(1.0, float(frac)))
+    d = int(d_pt * SCALE)
+    rows = _blank(d, d)
+    base = _hex_rgb(colour)
+    track = (255, 255, 255) if dark else (0, 0, 0)
+    track_a = 0.26 if dark else 0.18
+    cx = cy = d / 2.0
+    outer = d / 2.0 - 0.5
+    inner = outer - thick_pt * SCALE
+    two_pi = 2 * math.pi
+    step = 1.0 / SS
+    for py in range(d):
+        for px in range(d):
+            tc = fc = 0.0
+            for sy in range(SS):
+                fy = py + (sy + 0.5) * step
+                for sx in range(SS):
+                    fx = px + (sx + 0.5) * step
+                    dx, dy = fx - cx, fy - cy
+                    dist = math.hypot(dx, dy)
+                    if inner <= dist <= outer:
+                        tc += 1
+                        # angle measured from 12 o'clock, clockwise
+                        if (math.atan2(dx, -dy) % two_pi) <= frac * two_pi:
+                            fc += 1
+            n = SS * SS
+            if tc:
+                _blend(rows, px, py, track, track_a * (tc / n))
+            if fc:
+                _blend(rows, px, py, base, fc / n)
+    return d, d, rows
+
+
 # --------------------------------------------------------------------- sparkline
 
 def _seg_dist(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
@@ -234,6 +284,9 @@ def main() -> int:
             if item.get("type") == "spark":
                 data = spark(item.get("values") or [0], item.get("color", "#5E5CE6"), dark,
                              int(item.get("w", 120)), int(item.get("h", 22)))
+            elif item.get("type") == "ring":
+                data = ring(item.get("frac", 0), item.get("color", "#34C759"), dark,
+                            int(item.get("d", 14)), float(item.get("thick", 2.6)))
             else:
                 data = meter(item.get("frac", 0), item.get("color", "#34C759"), dark,
                              int(item.get("w", 74)), int(item.get("h", 7)))

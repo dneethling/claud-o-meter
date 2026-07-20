@@ -135,6 +135,31 @@ meter_b64() {
   printf '%s' "$img"
 }
 
+# Base64 PNG for the menu-bar ring gauge. Same bounded cache as meters (101
+# percentages x colour x appearance), so it renders once and is then free.
+ring_b64() {
+  local pint="$1" clr="$2" f tmp frac img
+  [ "$GRAPHICS" = "1" ] || return 0
+  [ -x "$PYTHON" ] || return 0
+  f="$METER_CACHE/r-${DARKJSON}-${clr#\#}-${pint}.b64"
+  if [ ! -s "$f" ]; then
+    frac=$(awk -v p="$pint" 'BEGIN{printf "%.4f", p/100}')
+    tmp="$f.$$.tmp"
+    printf '[{"key":"r","type":"ring","frac":%s,"color":"%s","dark":%s,"d":14,"thick":2.6}]' \
+      "$frac" "$clr" "$DARKJSON" \
+      | run_timeout 6 "$PYTHON" "$WIDGET_DIR/render_assets.py" 2>/dev/null \
+      | awk -F'\t' 'NR==1{print $2}' > "$tmp" 2>/dev/null
+    if [ -s "$tmp" ]; then mv -f "$tmp" "$f" 2>/dev/null; else rm -f "$tmp" 2>/dev/null; fi
+  fi
+  [ -s "$f" ] || return 0
+  img=$(cat "$f" 2>/dev/null)
+  case "$img" in
+    ""|*[!A-Za-z0-9+/=]*) return 0 ;;
+  esac
+  [ ${#img} -gt 50000 ] && return 0
+  printf '%s' "$img"
+}
+
 # Base64 PNG for a sparkline, keyed by a hash of its own values. Unlike meters
 # (a bounded set of 101 percentages) trend data drifts every refresh, so these
 # entries would accumulate - prune anything untouched for 3 days on each run.
@@ -544,15 +569,26 @@ if [ $ON_CREDITS -eq 1 ]; then
   TITLE_COLOR=$(color_for_pct "$SPEND_I")
   TITLE="${S_I:-?}% · ${SPEND_USED_STR}"
 else
-  if [[ "$S_I" =~ ^[0-9]+$ ]] && [ "$S_I" -ge "$CRIT_PCT" ]; then
+  TITLE_COLOR=$(color_for_pct "$S_I")
+  # A drawn ring gauge, state-coloured, so the menu bar shows how full the
+  # session is without you reading a number. Falls back to the SF Symbol set if
+  # rendering is off or unavailable.
+  RING=""
+  [[ "$S_I" =~ ^[0-9]+$ ]] && RING=$(ring_b64 "$S_I" "$TITLE_COLOR")
+  if [ -n "$RING" ]; then
+    ICON="image=$RING"
+  elif [[ "$S_I" =~ ^[0-9]+$ ]] && [ "$S_I" -ge "$CRIT_PCT" ]; then
     ICON="sfimage=bolt.trianglebadge.exclamationmark"
   elif [[ "$S_I" =~ ^[0-9]+$ ]] && [ "$S_I" -ge "$WARN_PCT" ]; then
     ICON="sfimage=gauge.with.dots.needle.67percent"
   else
     ICON="sfimage=gauge.with.dots.needle.33percent"
   fi
-  TITLE_COLOR=$(color_for_pct "$S_I")
   TITLE="${S_I:-?}%"
+  # Weekly stays in the menu bar. It was briefly dropped when the ring arrived,
+  # on the theory that the dropdown covered it - but weekly is the number you
+  # plan around, and having to open a menu to see it is a real loss. The ring
+  # replaces the old SF Symbol, it does not replace data.
   if [[ "$W_I" =~ ^[0-9]+$ ]]; then
     TITLE="$TITLE · ${W_I}%w"
   fi
@@ -730,7 +766,10 @@ EOF
   elif [ -n "$CC_SPARK" ]; then
     echo "  7-day trend $CC_SPARK | font=Menlo size=11 color=$LBL"
   fi
-  echo "Value extracted from Max: ≈$(humanize_usd "$CC_MONTH_USD")/mo at API rates | size=11 color=$LBL"
+  # State the window explicitly: this is a rolling 30 days (see claude_code_usage
+  # windows["month"], now-29d through today), not a calendar month and not a
+  # lifetime total. "/mo" alone read as an all-time figure.
+  echo "≈$(humanize_usd "$CC_MONTH_USD") of API value · last 30 days | size=11 color=$LBL"
   echo "---"
 fi
 
