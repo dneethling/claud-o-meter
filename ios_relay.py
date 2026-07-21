@@ -28,6 +28,7 @@ Commands:
   python ios_relay.py --self-test     # build a demo payload, print it (no creds/net)
   python ios_relay.py --register-token HEX [--activity-id ID]
   python ios_relay.py --list-tokens
+  python ios_relay.py --print-service   # launchd/systemd unit to keep it running
 """
 from __future__ import annotations
 
@@ -499,6 +500,94 @@ def cmd_list_tokens() -> int:
     return 0
 
 
+def _service_python() -> str:
+    """Prefer the repo venv's python; fall back to whatever's running us."""
+    venv_py = REPO / ".venv" / "bin" / "python"
+    return str(venv_py) if venv_py.exists() else sys.executable
+
+
+def render_service(kind: str, py: str, script: str, home: str) -> str:
+    """Render a keep-alive service unit so the relay restarts on crash/reboot.
+
+    Pure string builder (no I/O) so it's unit-testable. `kind` is 'launchd'
+    (macOS LaunchAgent) or 'systemd' (Linux --user unit)."""
+    if kind == "launchd":
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.dcai.claude-usage-ios-relay</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{py}</string>
+        <string>{script}</string>
+    </array>
+    <!-- Long-running daemon: relaunch it if it ever exits. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/claude-usage-ios-relay.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/claude-usage-ios-relay.err</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>{home}</string>
+    </dict>
+</dict>
+</plist>
+"""
+    if kind == "systemd":
+        return f"""[Unit]
+Description=Claude usage -> iOS Live Activity relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart={py} {script}
+Restart=always
+RestartSec=5
+Environment=HOME={home}
+
+[Install]
+WantedBy=default.target
+"""
+    raise ValueError(f"unknown service kind: {kind!r} (expected 'launchd' or 'systemd')")
+
+
+def cmd_print_service(kind: str) -> int:
+    py = _service_python()
+    script = str(REPO / "ios_relay.py")
+    home = str(Path.home())
+
+    if kind == "auto":
+        system = platform.system()
+        if system == "Darwin":
+            kind = "launchd"
+        elif system == "Linux":
+            kind = "systemd"
+        else:
+            # Windows / other: no unit-file format — emit Task Scheduler commands.
+            print("# Windows: run the relay at logon via Task Scheduler.")
+            print(f'schtasks /Create /TN "ClaudeUsageIOSRelay" /SC ONLOGON /RL LIMITED '
+                  f'/TR "\\"{py}\\" \\"{script}\\""')
+            print('schtasks /Run /TN "ClaudeUsageIOSRelay"   # start now, no re-logon')
+            return 0
+
+    sys.stderr.write(
+        {"launchd": "# Save to ~/Library/LaunchAgents/com.dcai.claude-usage-ios-relay.plist, then:\n"
+                    "#   launchctl bootstrap gui/$(id -u) "
+                    "~/Library/LaunchAgents/com.dcai.claude-usage-ios-relay.plist\n",
+         "systemd": "# Save to ~/.config/systemd/user/claude-usage-ios-relay.service, then:\n"
+                    "#   systemctl --user daemon-reload && "
+                    "systemctl --user enable --now claude-usage-ios-relay\n"}[kind])
+    print(render_service(kind, py, script, home), end="")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Claude usage -> iOS Live Activity relay")
     ap.add_argument("--init", action="store_true", help="write a blank ~/.claude-usage-ios.conf")
@@ -509,10 +598,15 @@ def main(argv=None) -> int:
     ap.add_argument("--register-token", metavar="HEX", help="store a Live Activity push token")
     ap.add_argument("--activity-id", default="", help="optional id to tag a registered token")
     ap.add_argument("--list-tokens", action="store_true", help="show registered tokens")
+    ap.add_argument("--print-service", nargs="?", const="auto",
+                    choices=["auto", "launchd", "systemd"],
+                    help="print a keep-alive service unit (launchd/systemd; auto-detects OS)")
     args = ap.parse_args(argv)
 
     if args.init:
         return cmd_init(args.force)
+    if args.print_service:
+        return cmd_print_service(args.print_service)
     if args.self_test:
         return cmd_self_test()
     if args.list_tokens:

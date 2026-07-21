@@ -178,9 +178,22 @@ python ios_relay.py
 Find `<this-machine-LAN-IP>`: macOS `ipconfig getifaddr en0`, Linux `hostname -I`,
 Windows `ipconfig`.
 
-**Keep it running:** on macOS you can adapt the existing
-`com.darren.claude-usage-refresh.plist` LaunchAgent, or just run it in a terminal
-/ `tmux`. On Linux, a `systemd --user` service; on Windows, Task Scheduler.
+**Keep it running (starts on boot, restarts on crash).** `--print-service`
+generates a unit with the correct paths already filled in for your machine:
+
+```bash
+# macOS
+python ios_relay.py --print-service launchd > ~/Library/LaunchAgents/com.dcai.claude-usage-ios-relay.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.dcai.claude-usage-ios-relay.plist
+
+# Linux (systemd --user)
+python ios_relay.py --print-service systemd > ~/.config/systemd/user/claude-usage-ios-relay.service
+systemctl --user daemon-reload && systemctl --user enable --now claude-usage-ios-relay
+```
+
+On Windows, `python ios_relay.py --print-service` prints the `schtasks` command to
+run it at logon. Or, for a quick start, just leave `python ios_relay.py` running in
+a terminal / `tmux`. Logs go to `/tmp/claude-usage-ios-relay.{log,err}`.
 
 ---
 
