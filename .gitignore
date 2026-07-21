@@ -7,3 +7,15 @@ __pycache__/
 /tmp/
 *.dmg
 .claude-usage-widget.conf
+
+# iOS relay secrets / state — never commit these
+.claude-usage-ios.conf
+.claude-usage-ios-tokens.json
+*.p8
+
+# Xcode: the project is generated from ios/project.yml via XcodeGen
+ios/*.xcodeproj/
+ios/DerivedData/
+ios/build/
+*.xcuserstate
+*.xcworkspace/xcuserdata/

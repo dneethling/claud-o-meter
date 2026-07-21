@@ -155,7 +155,17 @@ Every data source: prints ONE JSON object to stdout, writes nothing else there, 
 
 **Why this order:** Phases 1-4 are fully deterministic and need nothing from the user, so an agent can do them unattended. Phase 5 is the highest *value* (it turns Codex from "how much have I used" into "am I about to get throttled"), but it needs the user to capture an undocumented endpoint from their browser first, so it goes last. Do not block Phases 1-4 waiting on the user.
 
-**YAGNI guardrails (do NOT build these):** no 57-provider support (the user uses two), no native Swift app (a prior native rewrite failed to render on this machine and was abandoned), no WidgetKit, no auto-update framework, no localisation, no inline pixel charts (sparklines cover the need).
+**YAGNI guardrails (do NOT build these):** no 57-provider support (the user uses two), no auto-update framework, no localisation, no inline pixel charts (sparklines cover the need).
+
+**Scope note — the guardrails are about the _macOS menu-bar widget_.** Do NOT
+rewrite the SwiftBar plugin as a native macOS Swift/WidgetKit app: a prior native
+rewrite failed to render on this machine and was abandoned; the bash+Python plugin
+stays. This does **not** forbid the separate **iOS companion** (`ios/`,
+`ios_relay.py`), added deliberately: it's a phone-only Live Activity that *reuses*
+the existing Python data layer (`fetch_usage.py`) rather than reimplementing it.
+On iOS, ActivityKit/WidgetKit is the only sanctioned way to show live meters at
+the top of the screen — the macOS rendering problem doesn't apply. See
+`docs/ios/README.md`.
 
 ---
 
