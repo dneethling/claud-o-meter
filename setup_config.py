@@ -84,14 +84,15 @@ def main() -> int:
               "the widget checks it on its first refresh).")
         return 0
 
-    sys.stderr.write("Could not find a logged-in, valid Claude session in Arc/Chrome/Brave.\n")
+    sys.stderr.write("Could not find a logged-in, valid Claude session (Claude desktop app, Arc, Chrome, or Brave).\n")
     for r in reasons:
         sys.stderr.write(r + "\n")
     sys.stderr.write(
         "\nMost common fixes:\n"
-        "  - Open https://claude.ai in Chrome/Arc/Brave, sign in, load the page once, then re-run.\n"
-        "  - If a line says 'no keychain entry', approve the macOS Keychain prompt for that browser\n"
-        "    (it asks permission to read the browser's Safe Storage key - click Always Allow).\n"
+        "  - Sign in to the Claude desktop app, OR open https://claude.ai in Chrome/Arc/Brave\n"
+        "    and load the page once, then re-run.\n"
+        "  - If a line says the key could not be read, approve the macOS Keychain prompt\n"
+        "    (it asks to read the app's/browser's Safe Storage key - click Always Allow).\n"
     )
     return 2
 

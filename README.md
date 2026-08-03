@@ -14,7 +14,7 @@ Menu bar widget that shows your Claude.ai session %, weekly %, and the current p
 
 There's no public API for Claude usage. The widget hits the same internal endpoint that `claude.ai/settings/usage` uses, with your browser's session cookie.
 
-1. `refresh_cookie.py` reads cookies directly from the cookie DBs of every Chromium-family browser you have (Arc, Chrome, Brave, Chromium), decrypts them with the per-browser Safe Storage key from your macOS Keychain, and **tests each candidate against the live Claude API**. The first one that returns a real JSON usage response gets written to `~/.claude-usage-widget.conf`.
+1. `refresh_cookie.py` reads cookies directly from the cookie DBs of the Claude desktop app and every Chromium-family browser you have (Arc, Chrome, Brave, Chromium), decrypts them with the per-browser Safe Storage key from your macOS Keychain, and **tests each candidate against the live Claude API**. The first one that returns a real JSON usage response gets written to `~/.claude-usage-widget.conf`.
 2. `fetch_usage.py` uses the cookie via `curl_cffi` (Chrome TLS fingerprint, so Cloudflare passes), parses the JSON, writes it to stdout. Refuses to write garbage on failures.
 3. The SwiftBar plugin reads, parses with `jq`, and renders.
 
@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/dneethling/claud-o-meter/master/ins
 
 This clones the repo to `~/claud-o-meter`, sets up Python, installs SwiftBar and jq,
 detects your Claude org from your browser, wires up the menu bar and the background
-cookie refresh, and launches it. Make sure you are logged into `claude.ai` in Arc,
+cookie refresh, and launches it. Make sure you are signed into the Claude desktop app, or `claude.ai` in Arc,
 Chrome, or Brave first, so it can read your session. That is the whole install.
 
 ## Updating
@@ -70,7 +70,7 @@ Launch SwiftBar → Preferences → Plugin Folder → choose `/path/to/claude-us
 
 If you previously copied it into `~/Library/Application Support/SwiftBar/Plugins/`, delete that copy (or any empty directories with the plugin name) so they don't shadow the real one.
 
-### 3. Make sure you're logged into Claude in any Chromium-family browser
+### 3. Make sure you are signed into Claude (desktop app or a Chromium browser)
 
 Open `claude.ai` in Arc / Chrome / Brave and sign in once. That's it. The refresher will find it.
 

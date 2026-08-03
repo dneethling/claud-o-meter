@@ -38,10 +38,10 @@ if ! ls -d /Applications/SwiftBar.app >/dev/null 2>&1; then
   brew install --cask swiftbar
 fi
 
-# 4. Config: detect the Claude org from the browser, then pull a validated cookie.
-echo "Detecting your Claude session from your browser ..."
+# 4. Config: detect the Claude org from the app/browser, then pull a validated cookie.
+echo "Detecting your Claude session (Claude app or browser) ..."
 if ! ./.venv/bin/python setup_config.py; then
-  echo "Log into https://claude.ai in Arc, Chrome, or Brave, then re-run this installer." >&2
+  echo "Sign in to the Claude desktop app (or https://claude.ai in Arc/Chrome/Brave), then re-run this installer." >&2
   exit 1
 fi
 ./.venv/bin/python refresh_cookie.py || echo "(the cookie will refresh automatically on the schedule)"
@@ -103,5 +103,5 @@ open -a SwiftBar 2>/dev/null || true
 
 echo ""
 echo "Done. Look for the gauge icon in your menu bar (top right)."
-echo "If it shows 'Re-auth', just make sure you are logged into claude.ai in your browser - it recovers on its own."
+echo "If it shows 'Re-auth', just make sure you are signed into the Claude app or claude.ai in your browser - it recovers on its own."
 echo "To update later: click the icon -> Update now (or it prompts you when a new version is pushed)."

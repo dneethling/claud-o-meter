@@ -46,6 +46,12 @@ HOME = Path.home()
 KEYCHAIN_TIMEOUT_SECONDS = float(os.environ.get("CLAUDE_KEYCHAIN_TIMEOUT_SECONDS", "90"))
 API_VALIDATION_TIMEOUT_SECONDS = 10
 
+# Sources we can read a claude.ai session from. The Claude desktop app is an
+# Electron/Chromium app, so its cookie DB and Safe Storage key work with exactly
+# the same decryption as the browsers - which means people who only use the
+# desktop app (never claude.ai in a browser) are supported without any extra
+# step. Verified: the app's Cookies DB holds a valid sessionKey that passes live
+# API validation.
 BROWSERS = [
     ("Arc",      "Arc Safe Storage",      [HOME / "Library/Application Support/Arc/User Data/Default/Cookies",
                                            *sorted((HOME / "Library/Application Support/Arc/User Data").glob("Profile */Cookies"))]),
@@ -54,6 +60,7 @@ BROWSERS = [
     ("Brave",    "Brave Safe Storage",    [HOME / "Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies",
                                            *sorted((HOME / "Library/Application Support/BraveSoftware/Brave-Browser").glob("Profile */Cookies"))]),
     ("Chromium", "Chromium Safe Storage", [HOME / "Library/Application Support/Chromium/Default/Cookies"]),
+    ("Claude app", "Claude Safe Storage", [HOME / "Library/Application Support/Claude/Cookies"]),
 ]
 
 
@@ -264,7 +271,7 @@ def validate_cookies(cookies: dict, usage_url: str) -> tuple[bool, str]:
 def refresh():
     cands = candidates()
     if not cands:
-        sys.stderr.write("No Chromium-family cookie DB found (Chrome/Arc/Brave/Chromium).\n")
+        sys.stderr.write("No Claude session store found (Claude app, Chrome, Arc, Brave, Chromium).\n")
         sys.exit(2)
 
     usage_url = read_usage_url()
@@ -288,10 +295,10 @@ def refresh():
         write_config(picked)
         return label, cookie_file, picked
 
-    sys.stderr.write("No valid Claude session found across browsers. Tried:\n")
+    sys.stderr.write("No valid Claude session found (Claude app or browsers). Tried:\n")
     for line in attempts:
         sys.stderr.write(line + "\n")
-    sys.stderr.write("\nFix: open claude.ai in a logged-in browser, then retry.\n")
+    sys.stderr.write("\nFix: sign in to the Claude desktop app or claude.ai in a browser, then retry.\n")
     sys.exit(2)
 
 
