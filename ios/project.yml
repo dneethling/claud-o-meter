@@ -1,0 +1,57 @@
+# XcodeGen project definition for the Claude Meter iOS app + Live Activity.
+#
+#   brew install xcodegen
+#   cd ios && xcodegen generate && open ClaudeMeter.xcodeproj
+#
+# Then set your signing Team in Xcode (or DEVELOPMENT_TEAM below) and run on a
+# device. The .xcodeproj is generated, so it is gitignored — edit this file, not
+# the project. If you'd rather not use XcodeGen, docs/ios/README.md explains how
+# to create the same two targets by hand.
+name: ClaudeMeter
+options:
+  bundleIdPrefix: co.dcai
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+    # Set this to your 10-character Apple Team ID to sign from the command line,
+    # or leave blank and pick your team in Xcode's Signing & Capabilities tab.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  ClaudeMeter:
+    type: application
+    platform: iOS
+    sources:
+      - path: ClaudeMeter
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.dcai.claudemeter
+        INFOPLIST_FILE: ClaudeMeter/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: "YES"
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - target: ClaudeMeterWidgetExtension
+
+  ClaudeMeterWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ClaudeMeterWidget
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.dcai.claudemeter.widget
+        INFOPLIST_FILE: ClaudeMeterWidget/Info.plist
+        # WidgetKit extensions must declare the extension point via Info.plist
+        # (done there), and link WidgetKit + SwiftUI (auto for SwiftUI widgets).
+        TARGETED_DEVICE_FAMILY: "1,2"
