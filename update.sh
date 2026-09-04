@@ -13,6 +13,10 @@ RC=$?
 if [ $RC -eq 0 ]; then
   # Refresh deps if requirements changed (cheap no-op when already satisfied).
   [ -x ./.venv/bin/pip ] && [ -f requirements.txt ] && ./.venv/bin/pip install -q -r requirements.txt 2>/dev/null
+  # Reconcile launchd agents to the pulled code - this is what makes updates
+  # (not just fresh installs) fix background jobs, e.g. retire the old duplicate
+  # refresher and set the keychain-timeout env. Idempotent.
+  [ -f "$WIDGET_DIR/agents.sh" ] && bash "$WIDGET_DIR/agents.sh" "$WIDGET_DIR" 2>/dev/null
   # Refresh the cached update status.
   bash "$WIDGET_DIR/check_update.sh" 2>/dev/null
   osascript -e 'display notification "Widget updated to the latest version" with title "Claude Usage" sound name "Glass"' 2>/dev/null

@@ -355,7 +355,7 @@ fi
 RESP=$("$PYTHON" "$FETCHER" 2>"$ERR_LOG")
 FETCH_EXIT=$?
 
-REFRESH_FAILED=0
+REFRESH_RC=0
 if [ $FETCH_EXIT -ne 0 ] || [ -z "$RESP" ]; then
   if [ -f "$REFRESHER" ]; then
     "$PYTHON" "$REFRESHER" 2>>"$ERR_LOG"
@@ -363,40 +363,56 @@ if [ $FETCH_EXIT -ne 0 ] || [ -z "$RESP" ]; then
     if [ $REFRESH_RC -eq 0 ]; then
       RESP=$("$PYTHON" "$FETCHER" 2>>"$ERR_LOG")
       FETCH_EXIT=$?
-    else
-      REFRESH_FAILED=1
     fi
   fi
 fi
 
-# Still failing after recovery attempt → distinguish reauth-needed from transient errors
+# Still failing after the recovery attempt. React to WHY, using refresh_cookie's
+# exit codes (2 session invalid, 3 network/offline, 4 keychain), so an offline
+# laptop keeps its last numbers on screen instead of being told to log in.
+OFFLINE=0
 if [ $FETCH_EXIT -ne 0 ] || [ -z "$RESP" ]; then
   ERR=$(tail -c 240 "$ERR_LOG" 2>/dev/null | tr '\n' ' ')
-  if [ $REFRESH_FAILED -eq 1 ] || echo "$ERR" | grep -q "account_session_invalid\|No valid Claude session"; then
-    # Genuinely needs the user to re-login in a browser
+  SESSION_DEAD=0
+  { [ "$REFRESH_RC" -eq 2 ] || echo "$ERR" | grep -q "account_session_invalid\|No valid Claude session"; } && SESSION_DEAD=1
+
+  if [ "$SESSION_DEAD" -eq 1 ]; then
     echo "⚠ Re-auth | sfimage=person.badge.key color=#FF9500"
     echo "---"
-    echo "Session expired — log into claude.ai in your browser"
-    echo "(Arc, Chrome, or Brave). Then the widget will recover automatically."
+    echo "Session expired. Sign in to the Claude desktop app, or claude.ai in | size=12 color=$LBL"
+    echo "Chrome / Arc / Brave. The widget recovers on its own. | size=12 color=$LBL"
     echo "---"
-    echo "Open claude.ai | href=https://claude.ai/login sfimage=safari"
+    echo "Open Claude | href=https://claude.ai/login sfimage=safari"
     echo "Force cookie refresh | bash='$PYTHON' param1='$REFRESHER' terminal=false refresh=true sfimage=key.fill"
+    echo "View error log | bash='/usr/bin/open' param1='-t' param2='$ERR_LOG' terminal=false sfimage=exclamationmark.bubble"
+    exit 0
+  elif [ "$REFRESH_RC" -eq 4 ]; then
+    echo "⚠ Keychain | sfimage=key color=#FF9500"
+    echo "---"
+    echo "Approve the macOS Keychain prompt (click Always Allow) so the widget | size=12 color=$LBL"
+    echo "can read your Claude session. | size=12 color=$LBL"
+    echo "---"
+    echo "Force cookie refresh | bash='$PYTHON' param1='$REFRESHER' terminal=false refresh=true sfimage=key.fill"
+    echo "View error log | bash='/usr/bin/open' param1='-t' param2='$ERR_LOG' terminal=false sfimage=exclamationmark.bubble"
+    exit 0
+  elif [ -s "$RAW" ]; then
+    # Offline or a transient blip, but we have the last good numbers. Show those,
+    # marked as stale, rather than an alarming error tile.
+    RESP=$(cat "$RAW"); OFFLINE=1
   else
-    # Transient — network, Cloudflare, etc.
-    echo "✖ Claude | sfimage=exclamationmark.circle color=#FF3B30"
+    echo "⏸ Offline | sfimage=wifi.slash color=#8E8E93"
     echo "---"
-    echo "Fetch failed | color=#FF3B30"
-    echo "${ERR:-Unknown error} | size=11 font=Menlo color=#999999"
+    echo "Can't reach claude.ai and there is no cached data yet. | size=12 color=$LBL"
+    echo "It recovers on its own once you are back online. | size=12 color=$LBL"
     echo "---"
-    echo "Open Claude | href=https://claude.ai/settings/usage"
+    echo "View error log | bash='/usr/bin/open' param1='-t' param2='$ERR_LOG' terminal=false sfimage=exclamationmark.bubble"
+    exit 0
   fi
-  echo "Edit config | bash='/usr/bin/open' param1='-t' param2='$CONFIG' terminal=false sfimage=pencil"
-  echo "View error log | bash='/usr/bin/open' param1='-t' param2='$ERR_LOG' terminal=false sfimage=exclamationmark.bubble"
-  exit 0
 fi
 
-# Got a valid response — only NOW save it as the canonical raw JSON
-echo "$RESP" > "$RAW"
+# Got a valid response (or last-good while offline). Only persist a FRESH one, so
+# the RAW file keeps its true last-updated time while offline.
+[ "$OFFLINE" -eq 0 ] && echo "$RESP" > "$RAW"
 
 # --- Parse -------------------------------------------------------------------
 SESSION=$(echo "$RESP" | jq -r '.five_hour.utilization // empty')
@@ -453,8 +469,10 @@ if [ -z "$S_I" ] && [ -z "$W_I" ]; then
 fi
 
 # Append a history sample and trim (used for the sparkline). Numeric-only so a
-# bad tick can never pollute the trend.
-if [[ "$S_I" =~ ^[0-9]+$ ]] && [[ "$W_I" =~ ^[0-9]+$ ]]; then
+# bad tick can never pollute the trend, and NOT while offline - re-recording the
+# last-known numbers as fresh samples would flatten the trend and skew the
+# prediction with points that are really just the same reading repeated.
+if [[ "$S_I" =~ ^[0-9]+$ ]] && [[ "$W_I" =~ ^[0-9]+$ ]] && [ "${OFFLINE:-0}" -eq 0 ]; then
   printf '%s %s %s\n' "$(date +%s)" "$S_I" "$W_I" >> "$HISTORY_FILE"
   hlines=$(wc -l < "$HISTORY_FILE" 2>/dev/null | tr -d ' ')
   if [ -n "$hlines" ] && [ "$hlines" -gt "$HISTORY_CAP" ]; then
@@ -655,12 +673,21 @@ if [ -n "$INCIDENT" ]; then
   ICON="sfimage=exclamationmark.triangle.fill"
   TITLE_COLOR="#FF9500"
 fi
+# Offline: a small marker on the title so the last-known numbers are not mistaken
+# for live ones.
+[ "${OFFLINE:-0}" -eq 1 ] && TITLE="⏸ $TITLE"
 echo "$TITLE | $ICON $(colorkey "$TITLE_COLOR") size=12"
 
 # --- Dropdown ----------------------------------------------------------------
 echo "---"
 echo "Claude Usage Dashboard | href=https://claude.ai/settings/usage size=14"
 echo "---"
+
+if [ "${OFFLINE:-0}" -eq 1 ]; then
+  OFF_LAST=$(stat -f "%Sm" -t "%a %H:%M" "$RAW" 2>/dev/null)
+  echo "⏸ Offline · showing last update${OFF_LAST:+ ($OFF_LAST)} | size=11 color=#8E8E93 href=https://claude.ai/settings/usage"
+  echo "---"
+fi
 
 if [ -n "$INCIDENT" ]; then
   echo "⚠ ${INCIDENT} reporting an outage | color=#FF9500 href=https://status.anthropic.com"
@@ -909,21 +936,32 @@ echo "-----"
 echo "-- Check for updates | bash='/bin/bash' param1='$CHECK_UPDATE' terminal=false refresh=true"
 echo "-- View on GitHub | href=$REPO_URL"
 echo "-- Build $UPD_SHA | color=$LBL"
-# API rates refresh themselves from Anthropic's published table. A checker that
-# silently stops working looks exactly like "no price changes", so show the last
-# result rather than letting it rot unnoticed.
+# API rates refresh themselves from Anthropic's published table. This is driven
+# from HERE, not a separate launchd job: a background check fires when the last
+# result is missing or older than 7 days, the same self-healing pattern the
+# update-check uses above. That removes a launchd agent that could silently fail
+# to install (and did). A checker that stops working looks exactly like "no
+# changes", so the last result is shown, and goes orange once it is genuinely old.
+PR_AGE_DAYS=999
 if [ -f "$PRICING_STATUS" ]; then
   PR_OK=$(jq -r '.ok // false' "$PRICING_STATUS" 2>/dev/null)
-  PR_DAY=$(jq -r '.checked_at // ""' "$PRICING_STATUS" 2>/dev/null | cut -dT -f1)
-  if [ "$PR_OK" = "true" ]; then
-    echo "-- Rates checked $PR_DAY | color=$LBL"
-  else
+  PR_TS=$(jq -r '.checked_at // ""' "$PRICING_STATUS" 2>/dev/null)
+  PR_DAY=${PR_TS%%T*}
+  PR_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${PR_TS%%.*}" +%s 2>/dev/null || echo 0)
+  [ "$PR_EPOCH" -gt 0 ] 2>/dev/null && PR_AGE_DAYS=$(( ( $(date +%s) - PR_EPOCH ) / 86400 ))
+  if [ "$PR_OK" != "true" ]; then
     PR_WHY=$(jq -r '.detail // "unknown"' "$PRICING_STATUS" 2>/dev/null | cut -c1-60)
     echo "-- ⚠ Rate check failing: $PR_WHY | color=#FF9500"
+  elif [ "$PR_AGE_DAYS" -ge 8 ] 2>/dev/null; then
+    echo "-- ⚠ Rates last checked $PR_DAY (${PR_AGE_DAYS}d ago) | color=#FF9500"
+  else
+    echo "-- Rates checked $PR_DAY | color=$LBL"
   fi
 fi
-# Only offer the action if the checker is actually present - a partial update
-# would otherwise leave a menu item that does nothing when clicked.
+# Self-heal: if the check is missing or over 7 days old, run it in the background.
+if [ -f "$CHECK_PRICING" ] && { [ ! -f "$PRICING_STATUS" ] || [ "$PR_AGE_DAYS" -ge 7 ] 2>/dev/null; }; then
+  ( "$PYTHON" "$CHECK_PRICING" >/dev/null 2>&1 & )
+fi
 [ -f "$CHECK_PRICING" ] && \
   echo "-- Check rates now | bash='$PYTHON' param1='$CHECK_PRICING' terminal=false refresh=true"
 

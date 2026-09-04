@@ -50,52 +50,12 @@ fi
 defaults write com.ameba.SwiftBar PluginDirectory -string "$DIR/plugins"
 defaults write com.ameba.SwiftBar DisablePluginsUpdates -bool true 2>/dev/null || true
 
-# 6. Install the periodic cookie-refresh LaunchAgent (paths baked in for this machine).
-PLIST="$HOME/Library/LaunchAgents/com.claudometer.refresh.plist"
-cat > "$PLIST" <<PL
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>com.claudometer.refresh</string>
-  <key>ProgramArguments</key><array>
-    <string>$DIR/.venv/bin/python</string>
-    <string>$DIR/refresh_cookie.py</string>
-  </array>
-  <key>StartInterval</key><integer>1800</integer>
-  <key>RunAtLoad</key><true/>
-  <key>StandardErrorPath</key><string>/tmp/claude-usage-refresh.err</string>
-  <key>EnvironmentVariables</key><dict>
-    <key>HOME</key><string>$HOME</string>
-  </dict>
-</dict></plist>
-PL
-launchctl unload "$PLIST" 2>/dev/null || true
-launchctl load "$PLIST" 2>/dev/null || true
-
-# 6b. Weekly API-rate refresh. Anthropic changes prices periodically and a stale
-# table silently misreports the "value extracted" figure (Opus once drifted to
-# more than double). This only ever writes a validated local override, never the
-# repo, so a bad scrape cannot reach anyone else's install.
-PPLIST="$HOME/Library/LaunchAgents/com.claudometer.pricing.plist"
-cat > "$PPLIST" <<PL
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>com.claudometer.pricing</string>
-  <key>ProgramArguments</key><array>
-    <string>$DIR/.venv/bin/python</string>
-    <string>$DIR/check_pricing.py</string>
-  </array>
-  <key>StartInterval</key><integer>604800</integer>
-  <key>RunAtLoad</key><true/>
-  <key>StandardErrorPath</key><string>/tmp/claude-usage-pricing.err</string>
-  <key>EnvironmentVariables</key><dict>
-    <key>HOME</key><string>$HOME</string>
-  </dict>
-</dict></plist>
-PL
-launchctl unload "$PPLIST" 2>/dev/null || true
-launchctl load "$PPLIST" 2>/dev/null || true
+# 6. Reconcile the launchd background agents (the 30-min cookie refresher, and
+# retire any legacy/duplicate agents). Idempotent, and shared with update.sh so
+# updates fix background jobs too - not just code. The weekly rate check is now
+# driven from the plugin, so there is no separate pricing agent here.
+bash "$DIR/agents.sh" "$DIR" \
+  || echo "(background refresh agent not set up; the widget still works, cookies just refresh when you open the menu)"
 
 # 7. Prime the update-status cache and launch.
 bash "$DIR/check_update.sh" >/dev/null 2>&1 || true

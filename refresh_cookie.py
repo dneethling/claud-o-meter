@@ -268,38 +268,57 @@ def validate_cookies(cookies: dict, usage_url: str) -> tuple[bool, str]:
     return True, "ok"
 
 
+# Exit codes let the plugin react correctly instead of always crying "log in".
+EXIT_SESSION_INVALID = 2   # a real session exists but is expired/rejected, or none found
+EXIT_NETWORK = 3           # cannot reach claude.ai (offline or the API is down)
+EXIT_KEYCHAIN = 4          # the Safe Storage key could not be read (prompt denied/ignored)
+
+
 def refresh():
     cands = candidates()
     if not cands:
         sys.stderr.write("No Claude session store found (Claude app, Chrome, Arc, Brave, Chromium).\n")
-        sys.exit(2)
+        sys.exit(EXIT_SESSION_INVALID)
 
     usage_url = read_usage_url()
     if not usage_url:
         sys.stderr.write(f"No USAGE_URL in {CONFIG_PATH}\n")
-        sys.exit(2)
+        sys.exit(EXIT_SESSION_INVALID)
 
     attempts: list[str] = []
+    saw_keychain = saw_other = False
     for label, service, cookie_file, _mtime in cands:
         tag = f"{label}/{cookie_file.parent.name}"
         cookies, err = try_extract(service, cookie_file)
         if cookies is None:
             attempts.append(f"  [{tag}] skipped: {err}")
+            if "eychain" in err:          # "could not read the ... Keychain key"
+                saw_keychain = True
+            else:
+                saw_other = True
             continue
         ok, reason = validate_cookies(cookies, usage_url)
-        if not ok:
-            attempts.append(f"  [{tag}] rejected: {reason}")
-            continue
-
-        picked = {k: cookies[k] for k in NEEDED if k in cookies}
-        write_config(picked)
-        return label, cookie_file, picked
+        if ok:
+            picked = {k: cookies[k] for k in NEEDED if k in cookies}
+            write_config(picked)
+            return label, cookie_file, picked
+        attempts.append(f"  [{tag}] rejected: {reason}")
+        # A network-class failure hits every candidate identically, and each is a
+        # ~10s API call - so stop at the first one rather than probing every
+        # profile, which is what turned an offline laptop into a multi-minute hang.
+        if reason.startswith("http error") or reason.startswith("curl_cffi"):
+            sys.stderr.write("Cannot reach claude.ai (offline or the API is down).\n")
+            sys.exit(EXIT_NETWORK)
+        saw_other = True
 
     sys.stderr.write("No valid Claude session found (Claude app or browsers). Tried:\n")
     for line in attempts:
         sys.stderr.write(line + "\n")
+    if saw_keychain and not saw_other:
+        sys.stderr.write("\nFix: approve the macOS Keychain prompt (click Always Allow).\n")
+        sys.exit(EXIT_KEYCHAIN)
     sys.stderr.write("\nFix: sign in to the Claude desktop app or claude.ai in a browser, then retry.\n")
-    sys.exit(2)
+    sys.exit(EXIT_SESSION_INVALID)
 
 
 def write_config(cookies_dict: dict) -> None:

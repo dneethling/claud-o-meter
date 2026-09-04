@@ -55,6 +55,10 @@ def map_key(name: str) -> str | None:
         return None
     fam, ver = m.group(1), m.group(2)
     if fam in ("fable", "mythos"):
+        # 5.1 dropped cache-read to 0.025x, so it needs its own key; 5.0 keeps
+        # the general family key.
+        if ver is not None and abs(float(ver) - 5.1) < 1e-9:
+            return f"{fam}-5-1"
         return fam
     if ver is None:
         return None
@@ -73,7 +77,8 @@ def map_key(name: str) -> str | None:
         return "haiku" if v >= 4 else None
     return None
 # Keys must be tried most-specific-first when matching a model id.
-KEY_ORDER = ["fable", "mythos", "opus-4-1", "opus-4-202", "opus",
+KEY_ORDER = ["fable-5-1", "mythos-5-1", "fable", "mythos",
+             "opus-4-1", "opus-4-202", "opus",
              "sonnet-5", "sonnet", "3-5-haiku", "haiku"]
 ANCHORS = ("opus", "sonnet", "haiku")     # if these vanish, something is wrong
 
@@ -228,8 +233,17 @@ def validate(table: dict) -> tuple[bool, str]:
         # documented multipliers - catches a shifted or renamed column
         if abs(r["cache_write"] - r["in"] * 1.25) > max(0.02, r["in"] * 0.02):
             return False, f"{key}: cache_write {r['cache_write']} != 1.25x input {r['in']}"
-        if abs(r["cache_read"] - r["in"] * 0.10) > max(0.02, r["in"] * 0.02):
-            return False, f"{key}: cache_read {r['cache_read']} != 0.1x input {r['in']}"
+        # cache read is 0.1x base input on most models; ONLY Fable/Mythos 5.1
+        # use 0.025x. Scope the lower rate to those two keys - otherwise a
+        # shifted Sonnet/Opus/Haiku column reading 0.025x would validate as if it
+        # were a 5.1 model and silently misprice it.
+        tol = max(0.02, r["in"] * 0.02)
+        allowed = [r["in"] * 0.10]
+        if key in ("fable-5-1", "mythos-5-1"):
+            allowed.append(r["in"] * 0.025)
+        if all(abs(r["cache_read"] - a) > tol for a in allowed):
+            want = "0.1x or 0.025x" if key in ("fable-5-1", "mythos-5-1") else "0.1x"
+            return False, f"{key}: cache_read {r['cache_read']} is not {want} of input {r['in']}"
     return True, "ok"
 
 
@@ -281,7 +295,12 @@ def main() -> int:
     diffs = []
     for k, r in ordered.items():
         b = before.get(k)
-        if not b or abs(b.get("in", -1) - r["in"]) > 1e-9 or abs(b.get("out", -1) - r["out"]) > 1e-9:
+        # Compare ALL four fields, not just in/out: this feature exists because a
+        # cache-read-only change (Fable 5.1: $1.00 -> $0.25) drifted unseen. An
+        # in/out-only diff would miss the very thing it is meant to catch.
+        changed = not b or any(abs(b.get(f, -1) - r[f]) > 1e-9
+                               for f in ("in", "out", "cache_write", "cache_read"))
+        if changed:
             was = f"${b['in']}/${b['out']}" if b else "(new)"
             diffs.append(f"{k}: {was} -> ${r['in']}/${r['out']}")
 

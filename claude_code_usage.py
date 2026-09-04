@@ -36,19 +36,26 @@ SCAN_WINDOW_DAYS = 35
 CACHE_VERSION = 4
 
 # API-equivalent pricing, USD per 1M tokens, for the "value from your
-# subscription" figure. Verified 2026-07-20 against Anthropic's published rates:
+# subscription" figure. Verified 2026-09-04 against Anthropic's published rates:
 # https://platform.claude.com/docs/en/about-claude/pricing
 #
 # Keys are matched as substrings against message.model (lowercased) IN ORDER, so
 # more specific keys must come first: "opus-4-1" before "opus", "sonnet-5"
-# before "sonnet". This matters because rates are not uniform across a family -
-# Opus dropped from $15/$75 to $5/$25 at 4.5, and pricing "opus" as a single
-# rate overstated the figure roughly threefold.
+# before "sonnet", "fable-5-1" before "fable". Rates are NOT uniform within a
+# family - Opus dropped from $15/$75 to $5/$25 at 4.5, and Fable/Mythos 5.1
+# dropped their cache-read from $1.00 to $0.25 versus 5.0 - so a single family
+# key silently misprices whichever version it does not describe.
 #
 # Cache columns follow Anthropic's documented multipliers: 5-minute cache write
-# is 1.25x base input, cache read is 0.1x base input. (A 1-hour cache write is
-# 2x, which we do not model - Claude Code uses the 5-minute cache.)
+# is 1.25x base input; cache read is 0.1x base input on most models but 0.025x
+# on Fable 5.1 / Mythos 5.1. (A 1-hour cache write is 2x, which we do not model -
+# Claude Code uses the 5-minute cache.)
 PRICING = {
+    # Fable/Mythos 5.1 cache reads are $0.25 (0.025x), not $1.00 like 5.0. Since
+    # Claude Code usage is mostly cache reads, mispricing this inflated the
+    # figure ~4x on the 5.1 slice. Match the version-stamped id before "fable".
+    "fable-5-1":  {"in": 10.00, "out": 50.00, "cache_write": 12.50, "cache_read": 0.25},
+    "mythos-5-1": {"in": 10.00, "out": 50.00, "cache_write": 12.50, "cache_read": 0.25},
     "fable":      {"in": 10.00, "out": 50.00, "cache_write": 12.50, "cache_read": 1.00},
     "mythos":     {"in": 10.00, "out": 50.00, "cache_write": 12.50, "cache_read": 1.00},
     # Opus 4.1 and Opus 4 are deprecated/retired and kept the older, higher rates.
@@ -58,8 +65,9 @@ PRICING = {
     "opus-4-1":   {"in": 15.00, "out": 75.00, "cache_write": 18.75, "cache_read": 1.50},
     "opus-4-202": {"in": 15.00, "out": 75.00, "cache_write": 18.75, "cache_read": 1.50},
     "opus":       {"in":  5.00, "out": 25.00, "cache_write":  6.25, "cache_read": 0.50},
-    # Sonnet 5 introductory pricing runs to 31 Aug 2026, after which it becomes
-    # $3/$15 like the other Sonnets - move this line then.
+    # Sonnet 5 is $2/$10 - the live page (checked 2026-09-04) no longer carries
+    # the "introductory until 31 Aug 2026" qualifier, so $2/$10 is the standing
+    # rate. Do NOT "move" this to $3/$15; that would reintroduce a bug.
     "sonnet-5":   {"in":  2.00, "out": 10.00, "cache_write":  2.50, "cache_read": 0.20},
     "sonnet":     {"in":  3.00, "out": 15.00, "cache_write":  3.75, "cache_read": 0.30},
     # Haiku 3.5 is retired on a lower rate than Haiku 4.5; its id leads with the
