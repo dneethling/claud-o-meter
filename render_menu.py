@@ -668,6 +668,23 @@ def _alerts(s_i, w_i, spend_i, on_credits, spend_used_str, spend_limit_str, week
             pass
         if s_i.isdigit() and w_i.isdigit():
             LASTSEEN_FILE.write_text(f"{s_i} {w_i}\n")
+        # New version available: banner once per (version, commits-behind) so it
+        # never nags, reusing the usage-alert dedup + mute. Fires within a tick of
+        # the 6-hourly background check finding the repo behind, with the menu
+        # never opened. UPDATE_STATUS is "<behind> <local_sha> <epoch>"; require all
+        # three so a truncated write never fires a bogus banner. (A force-push that
+        # kept the same behind count would be missed - but we never force-push the
+        # distribution branch, and a normal push always bumps the count.)
+        try:
+            parts = UPDATE_STATUS.read_text().split()
+            if len(parts) >= 3 and parts[0].isdigit() and int(parts[0]) > 0:
+                n = int(parts[0])
+                notify("Claude Usage",
+                       f"Update available - {n} new version{'' if n == 1 else 's'}. "
+                       "Open the menu and click Update now.",
+                       f"update_{parts[1]}_{parts[0]}")
+        except Exception:
+            pass
     finally:
         try:
             os.rmdir(lock)
