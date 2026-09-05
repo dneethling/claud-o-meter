@@ -108,7 +108,7 @@ def meter_rows(frac: float, color: str, dark: bool, w_pt: int = 74, h_pt: int = 
     # A lighter sibling of the accent for the gradient's left end.
     light = tuple(min(255, int(c + (255 - c) * 0.34)) for c in base)
     track_rgb = (255, 255, 255) if dark else (0, 0, 0)
-    track_a = 0.20 if dark else 0.13
+    track_a = 0.20 if dark else 0.18
 
     # Fill is its own capsule so a small percentage still reads as a rounded pill
     # rather than a sliver clipped flat on its right edge.
@@ -251,7 +251,10 @@ def spark_rows(values: list[float], color: str, dark: bool,
                         area += 1
             if area:
                 depth = 1.0 - (py / max(1.0, h))     # strongest just under the line
-                _blend(rows, px, py, rgb, 0.30 * (area / (SS * SS)) * (0.35 + 0.65 * depth))
+                # Fill strong enough to read as a graph body, not a bare line -
+                # a faint wash disappears on a dark menu, so dark gets more punch.
+                fa = 0.46 if dark else 0.34
+                _blend(rows, px, py, rgb, fa * (area / (SS * SS)) * (0.45 + 0.55 * depth))
 
             # the line itself
             d = min((_seg_dist(fx, fy, *pts[i], *pts[i + 1]) for i in range(len(pts) - 1)),
