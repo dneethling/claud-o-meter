@@ -1,0 +1,27 @@
+name: Notch CI
+on:
+  push:
+    branches: [codex/notch-comparison]
+    paths: ['notch/**', '.github/workflows/notch.yml']
+  pull_request:
+    paths: ['notch/**', '.github/workflows/notch.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: notch
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: make test
+      - name: Package comparison build
+        run: ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Debug/ClaudOMeterNotch.app ClaudOMeterNotch-comparison.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClaudOMeterNotch-comparison
+          path: notch/ClaudOMeterNotch-comparison.zip
