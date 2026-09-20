@@ -1,27 +1,9 @@
 #!/bin/bash
-# Pull the latest widget from GitHub and refresh Python deps. Safe: uses
-# --ff-only so it never creates a merge or clobbers local edits (it just
-# reports if the tree has diverged). The user's config lives outside the repo
-# (~/.claude-usage-widget.conf) so it is never touched.
-
+# The helper records failures honestly and only fast-forwards a clean checkout.
 WIDGET_DIR="${CLAUDE_WIDGET_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)}"
-cd "$WIDGET_DIR" 2>/dev/null || exit 1
-
-OUT=$(git pull --ff-only 2>&1)
-RC=$?
-
-if [ $RC -eq 0 ]; then
-  # Refresh deps if requirements changed (cheap no-op when already satisfied).
-  [ -x ./.venv/bin/pip ] && [ -f requirements.txt ] && ./.venv/bin/pip install -q -r requirements.txt 2>/dev/null
-  # Reconcile launchd agents to the pulled code - this is what makes updates
-  # (not just fresh installs) fix background jobs, e.g. retire the old duplicate
-  # refresher and set the keychain-timeout env. Idempotent.
-  [ -f "$WIDGET_DIR/agents.sh" ] && bash "$WIDGET_DIR/agents.sh" "$WIDGET_DIR" 2>/dev/null
-  # Refresh the cached update status.
-  bash "$WIDGET_DIR/check_update.sh" 2>/dev/null
-  osascript -e 'display notification "Widget updated to the latest version" with title "Claude Usage" sound name "Glass"' 2>/dev/null
+if "$WIDGET_DIR/.venv/bin/python" "$WIDGET_DIR/widget_update.py" install; then
+  osascript -e 'display notification "Update installed. Refresh the widget to use it." with title "Claud-o-meter"' 2>/dev/null || true
 else
-  # Diverged (local edits) - do not clobber; tell the user.
-  osascript -e "display notification \"Update needs attention: local changes. Run 'git status' in the widget folder.\" with title \"Claude Usage\"" 2>/dev/null
-  echo "$OUT" >&2
+  osascript -e 'display notification "Update incomplete. Open the widget menu for details and retry." with title "Claud-o-meter"' 2>/dev/null || true
+  exit 1
 fi
