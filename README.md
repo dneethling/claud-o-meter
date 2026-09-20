@@ -105,6 +105,30 @@ in the session rollout files (falls back to today's token volume if no quota is
 found yet). `cc` is Claude Code's token volume today. Remove the line (or set
 `claude`) for the default.
 
+### Display settings without editing config
+
+Open **Display settings** in the widget menu:
+
+- **Detail → Limits only** keeps Claude and Codex quota readings visible while
+  hiding token totals, API-value estimates and activity charts. **Full dashboard**
+  restores the existing detail (the default).
+- **Menu bar** chooses Claude, Claude + Codex, or Claude + Code + Codex.
+- **Colours** chooses traffic lights, colour-blind friendly or monochrome.
+
+The selected option is checked. Changes refresh the widget immediately and preserve
+credentials, comments and other configuration. Manual configuration still works;
+`DETAIL_LEVEL=compact` enables limits-only mode and `DETAIL_LEVEL=full` restores it.
+
+The first Claude summary identifies the most-used known allowance, including
+per-model limits, and shows how much is left. The menu-bar warning colour follows
+that allowance, while the session/weekly numbers keep their usual positions.
+Credit mode continues to show credit spending. Individual quota rows show both
+**used** and **left**; Codex secondary quotas retain their own reset time.
+
+Offline readings are marked as saved and do not trigger usage/reset alerts or
+live pace forecasts. An unrecognised usage response does not overwrite the last
+good cached reading.
+
 ### Colour themes
 
 Add a `THEME=` line to the config to change how percentages are coloured:
@@ -129,9 +153,9 @@ Under the Weekly row, once enough history has accumulated, the widget projects y
 
 | Title shows | What it means | What to do |
 |---|---|---|
-| `29% · 7%w` (green) | Session 29%, weekly 7%. Everything's fine. | Nothing. |
-| Orange gauge / 60-84% | Session approaching limit. You also got a notification. | Maybe slow down. |
-| Red bolt / 85%+ | Critical. Another notification. | Wait for reset, see dropdown. |
+| `29% · 7%w` (green) | Session 29%, weekly 7%; known Claude limits are below warning levels. | Nothing. |
+| Orange gauge / 60-84% | A known Claude allowance is approaching its limit. Open the menu to see which. | Maybe slow down. |
+| Red bolt / 85%+ | A known Claude allowance is critical. Open the menu to see which. | Wait for reset, see dropdown. |
 | `⚠ Re-auth` (orange) | No valid Claude session anywhere - you logged out everywhere. | Log into `claude.ai` in your browser; the widget recovers on its own within 5 min. |
 | `✖ Claude` (red) | Network / Cloudflare / something transient. | Click → View error log. Usually self-heals next tick. |
 | `?%` (orange `?` icon) | Fetch succeeded but the JSON shape doesn't match - Anthropic likely renamed a field. | Click → View raw JSON. Send the snippet to whoever maintains your fork so they can fix the `jq` paths. |
