@@ -77,3 +77,13 @@ def test_release_notes_come_from_incoming_changes(monkeypatch, tmp_path):
     result = update.check()
     assert result["state"] == "available"
     assert result["changes"] == ["Clearer forecasts", "Better setup"]
+
+
+def test_busy_update_cannot_be_reported_as_installed(monkeypatch, tmp_path):
+    monkeypatch.setattr(update.sys, "argv", ["widget_update.py", "install"])
+    real_open = update.os.open
+    monkeypatch.setattr(update.os, "open", lambda path, flags, mode: real_open(tmp_path / "lock", flags, mode))
+    def busy(*args):
+        raise BlockingIOError()
+    monkeypatch.setattr(update.fcntl, "flock", busy)
+    assert update.main() == 3
