@@ -125,3 +125,13 @@ def test_forecast_explains_both_runout_and_reset():
     assert "8.0 percentage points/day" in lines[0]
     assert "run out" in lines[1] and "resets" in lines[1]
     assert "Estimate" in lines[2]
+
+
+def test_small_reset_is_excluded_by_the_known_window_boundary():
+    now = datetime.now(timezone.utc)
+    reset = now + timedelta(days=7) - timedelta(minutes=20)
+    # The old window was only at 10%, too small for drop-based detection.
+    points = [(now.timestamp() - 3600, 8), (now.timestamp() - 1800, 10),
+              (now.timestamp() - 600, 1), (now.timestamp(), 2)]
+    result = predict.predict_metric(points, reset, now, 7 * 24 * 3600)
+    assert result["reason"] == "insufficient_history"
