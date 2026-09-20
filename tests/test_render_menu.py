@@ -113,3 +113,15 @@ def test_preference_menu_marks_current_selection(monkeypatch):
     assert "checked=true" in compact
     assert "checked=false" in full
     assert "param2='DETAIL_LEVEL' param3='compact'" in compact
+
+
+def test_weekly_planning_appears_only_with_live_reading(monkeypatch, tmp_path):
+    from datetime import datetime, timedelta, timezone
+    data = payload(20, 68)
+    data["seven_day"]["resets_at"] = (datetime.now(timezone.utc) + timedelta(days=4)).isoformat()
+    text, _ = render(monkeypatch, tmp_path, data, compact=True)
+    assert "Budget ≈8.0 percentage points/day" in text
+    assert "Learning your pace" in text
+    text, _ = render(monkeypatch, tmp_path, data, offline=True)
+    assert "Budget ≈" not in text
+    assert "Learning your pace" not in text
