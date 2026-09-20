@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -97,6 +98,7 @@ def _conf(key: str, default: str) -> str:
     return default
 
 MENUBAR_MODE = _conf("MENUBAR_MODE", "claude")
+DETAIL_LEVEL = _conf("DETAIL_LEVEL", "full")
 THEME = _conf("THEME", "semantic")
 GRAPHICS = _conf("GRAPHICS", "1")
 STATUS_ALERT = _conf("STATUS_ALERT", "major")
@@ -120,10 +122,20 @@ def color_for_pct(pct) -> str:
 def colorkey(clr: str) -> str:
     return f"color={clr}" if clr else ""
 
+def percentage(value):
+    """An absent or malformed usage value is unknown, never zero."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+        return number if math.isfinite(number) and 0 <= number <= 1_000_000 else None
+    except (TypeError, ValueError):
+        return None
+
+
 def rnd(x) -> str:
-    if x is None or x == "":
-        return ""
-    return f"{float(x):.0f}"
+    value = percentage(x)
+    return "" if value is None else f"{value:.0f}"
 
 def humanize_tokens(n) -> str:
     if n is None or n == "" or n == "null":
@@ -260,11 +272,11 @@ def ring_img(pint: str, clr: str) -> str:
 
 
 def print_metric(label: str, pct, reset: str) -> None:
-    if pct is None or pct == "":
-        return
     pint = rnd(pct)
+    if not pint:
+        return
     clr = color_for_pct(pint)
-    info = f"{label} · {pint}%"
+    info = f"{_san(label)} · {pint}% used · {max(0, 100 - int(pint))}% left"
     if reset:
         info = f"{info} · resets {reset}"
     img = meter_img(pint, clr)
@@ -353,18 +365,15 @@ def main() -> int:
     except Exception:
         d = {}
 
-    if not RENDER_ONLY and not OFFLINE and raw.strip():
-        try:
-            RAW.write_text(raw)
-        except OSError:
-            pass
+    if not isinstance(d, dict):
+        d = {}
 
     # --- parse ---------------------------------------------------------------
-    five = d.get("five_hour") or {}
-    seven = d.get("seven_day") or {}
-    session = five.get("utilization")
+    five = d.get("five_hour") if isinstance(d.get("five_hour"), dict) else {}
+    seven = d.get("seven_day") if isinstance(d.get("seven_day"), dict) else {}
+    session = percentage(five.get("utilization"))
     session_reset = five.get("resets_at") or ""
-    week = seven.get("utilization")
+    week = percentage(seven.get("utilization"))
     week_reset = seven.get("resets_at") or ""
 
     scoped = []  # (name, percent, reset_iso)
@@ -404,6 +413,21 @@ def main() -> int:
 
     shape_broken = (s_i == "" and w_i == "")
 
+    # Only recognized readings replace the last-good cache. A changed response
+    # shape must not destroy the data used during the next network outage.
+    if not shape_broken and not RENDER_ONLY and not OFFLINE:
+        try:
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode="w", dir=RAW.parent, delete=False) as cache:
+                cache.write(raw)
+                cache_path = Path(cache.name)
+            try:
+                os.replace(cache_path, RAW)
+            finally:
+                cache_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
     # --- history (side effect) ----------------------------------------------
     if not RENDER_ONLY and s_i.isdigit() and w_i.isdigit() and not OFFLINE:
         try:
@@ -427,7 +451,7 @@ def main() -> int:
     week_reset_txt = fmt_reset_iso(week_reset)
 
     # --- alerts (side effects) ----------------------------------------------
-    if not RENDER_ONLY:
+    if not RENDER_ONLY and not OFFLINE and not shape_broken:
         _alerts(s_i, w_i, spend_i, on_credits, spend_used_str, spend_limit_str, week_reset_txt)
 
     # --- shape broken --------------------------------------------------------
@@ -470,19 +494,27 @@ def main() -> int:
                 notes.append(f"OpenAI: {o_desc or 'degraded service'}")
             status_note = " · ".join(notes)
 
+    # The title keeps session/weekly numbers in their familiar positions, but
+    # its warning colour follows the most constrained known Claude allowance.
+    limits = [("Session", session, session_reset), ("Weekly", week, week_reset)]
+    limits += [(str(name), percentage(pct), reset) for name, pct, reset in scoped]
+    known_limits = [item for item in limits if item[1] is not None]
+    tightest = max(known_limits, key=lambda item: item[1]) if known_limits else None
+    warning_pct = rnd(tightest[1]) if tightest else s_i
+
     # --- menu bar title ------------------------------------------------------
     if on_credits:
         icon = "sfimage=creditcard.fill"
         title_color = color_for_pct(spend_i)
         title = f"{s_i or '?'}% · {spend_used_str}"
     else:
-        title_color = color_for_pct(s_i)
+        title_color = color_for_pct(warning_pct)
         ring = ring_img(s_i, title_color) if s_i.isdigit() else ""
         if ring:
             icon = f"image={ring}"
-        elif s_i.isdigit() and int(s_i) >= CRIT_PCT:
+        elif warning_pct.isdigit() and int(warning_pct) >= CRIT_PCT:
             icon = "sfimage=bolt.trianglebadge.exclamationmark"
-        elif s_i.isdigit() and int(s_i) >= WARN_PCT:
+        elif warning_pct.isdigit() and int(warning_pct) >= WARN_PCT:
             icon = "sfimage=gauge.with.dots.needle.67percent"
         else:
             icon = "sfimage=gauge.with.dots.needle.33percent"
@@ -532,6 +564,25 @@ def main() -> int:
 
     emit(f"CLAUDE · account limits | size=12 color={LBL} sfimage=cloud.fill")
 
+    if tightest and not on_credits:
+        name, pct, reset = tightest
+        shown = int(rnd(pct))
+        remaining = max(0, 100 - shown)
+        if shown >= 100:
+            state = "Limit reached"
+        elif shown >= CRIT_PCT:
+            state = "Nearly at limit"
+        elif shown >= WARN_PCT:
+            state = "Approaching limit"
+        else:
+            state = "Room available"
+        prefix = "Saved reading" if OFFLINE else state
+        emit(f"{prefix} · {_san(name)} has {remaining}% left | size=12 {colorkey(color_for_pct(pct))}")
+        reset_text = fmt_reset_iso(reset)
+        if reset_text:
+            emit(f"  Resets {reset_text} | size=11 color={LBL}")
+        sep()
+
     if on_credits:
         spend_clr = color_for_pct(spend_i)
         emit(f"On usage credits · {spend_used_str} of {spend_limit_str} ({spend_i}%) | size=12 {colorkey(spend_clr)}")
@@ -541,14 +592,15 @@ def main() -> int:
 
     if session is not None and session != "":
         print_metric("Session · 5h", session, session_reset_txt)
-        trend = _session_trend()
-        s_img = spark_img(trend, color_for_pct(s_i))
-        if s_img:
-            emit(f"  trend · last 2h | size=11 color={LBL} image={s_img}")
-        else:
-            spark = sparkline(trend)
-            if spark:
-                emit(f"  trend (last ~2h) {spark} | font=Menlo size=13 {colorkey(color_for_pct(s_i))}")
+        if DETAIL_LEVEL != "compact":
+            trend = _session_trend()
+            s_img = spark_img(trend, color_for_pct(s_i))
+            if s_img:
+                emit(f"  trend · last 2h | size=11 color={LBL} image={s_img}")
+            else:
+                spark = sparkline(trend)
+                if spark:
+                    emit(f"  trend (last ~2h) {spark} | font=Menlo size=13 {colorkey(color_for_pct(s_i))}")
         sep()
 
     if week is not None and week != "":
@@ -558,9 +610,9 @@ def main() -> int:
             sep()
         else:
             print_metric("Weekly · all models", week, week_reset_txt)
-            if pred_verdict == "throttle" and pred_eta:
+            if not OFFLINE and pred_verdict == "throttle" and pred_eta:
                 emit(f"  ⚡ at this pace ~100% {fmt_reset_iso(pred_eta)} | size=11 {colorkey(color_for_pct(90))}")
-            elif pred_verdict == "headroom":
+            elif not OFFLINE and pred_verdict == "headroom":
                 emit(f"  on track to reset before the cap | size=11 {colorkey(color_for_pct(30))}")
             sep()
 
@@ -577,8 +629,9 @@ def main() -> int:
             emit(f"Credits enabled · ready when weekly limit hits | size=12 color={LBL}")
         sep()
 
-    _render_claude_code()
-    _render_codex()
+    if DETAIL_LEVEL != "compact":
+        _render_claude_code()
+    _render_codex(compact=DETAIL_LEVEL == "compact")
     _render_footer()
 
     flush()
@@ -736,7 +789,7 @@ def _render_claude_code():
     sep()
 
 
-def _render_codex():
+def _render_codex(compact=False):
     cx = run_json([CODEX_USAGE], 3, CODEX_SUMMARY)
     if not isinstance(cx, dict) or cx.get("available") is not True:
         return
@@ -753,13 +806,19 @@ def _render_codex():
     emit(f"CODEX | size=12 color={SEC_CX} sfimage=curlybraces")
     quota = cx.get("quota") or {}
     prim = quota.get("primary") or {}
-    if prim.get("used_percent") is not None:
+    if percentage(prim.get("used_percent")) is not None:
         win = prim.get("window", "weekly")
         reset_txt = fmt_reset_epoch(prim["resets_at"]) if prim.get("resets_at") else ""
         print_metric(f"Quota · {win}", prim["used_percent"], reset_txt)
-        sec = quota.get("secondary") or {}
-        if sec.get("used_percent") is not None:
-            print_metric(f"Quota · {sec.get('window', '5h')}", sec["used_percent"], "")
+    sec = quota.get("secondary") or {}
+    if percentage(sec.get("used_percent")) is not None:
+        reset_txt = fmt_reset_epoch(sec["resets_at"]) if sec.get("resets_at") else ""
+        print_metric(f"Quota · {sec.get('window', '5h')}", sec["used_percent"], reset_txt)
+    if compact:
+        if percentage(prim.get("used_percent")) is None and percentage(sec.get("used_percent")) is None:
+            emit(f"No quota reading yet · local token totals are not quota percentages | size=11 color={LBL}")
+        sep()
+        return
     emit(f"Today · {humanize_tokens(today.get('tokens', 0))} tokens · {threads} {thr_label} | size=12 color={LBL}")
     tail = f"7 days · {humanize_tokens(week.get('tokens', 0))}"
     if wow:
@@ -776,10 +835,25 @@ def _render_codex():
     sep()
 
 
+def _render_preferences():
+    script = str(WIDGET_DIR / "widget_preferences.py")
+    emit("Display settings | sfimage=slider.horizontal.3")
+    groups = [
+        ("Detail", "DETAIL_LEVEL", DETAIL_LEVEL, [("full", "Full dashboard"), ("compact", "Limits only")]),
+        ("Menu bar", "MENUBAR_MODE", MENUBAR_MODE, [("claude", "Claude"), ("codex", "Claude + Codex"), ("both", "Claude + Code + Codex")]),
+        ("Colours", "THEME", THEME, [("semantic", "Traffic lights"), ("colorblind", "Colour-blind friendly"), ("minimal", "Monochrome")]),
+    ]
+    for label, key, selected, choices in groups:
+        emit(f"-- {label}")
+        for value, title in choices:
+            emit(f"---- {title} | bash='{PYTHON}' param1='{script}' param2='{key}' param3='{value}' terminal=false refresh=true checked={'true' if selected == value else 'false'}")
+
+
 def _render_footer():
     sep()
     emit("Refresh now | refresh=true sfimage=arrow.clockwise")
     emit(f"Copy status | bash='/bin/bash' param1='-c' param2='\"{PYTHON}\" \"{COPY_SUMMARY}\" | pbcopy' terminal=false sfimage=doc.on.clipboard")
+    _render_preferences()
     emit("Export usage | sfimage=square.and.arrow.up")
     emit(f"-- as CSV | bash='{PYTHON}' param1='{EXPORT}' param2='csv' terminal=false")
     emit(f"-- as JSON | bash='{PYTHON}' param1='{EXPORT}' param2='json' terminal=false")
