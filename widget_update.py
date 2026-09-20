@@ -99,7 +99,8 @@ def main():
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            return 0
+            print("An update check or installation is already running.")
+            return 3
         result = install() if action == "install" else check()
         # Auto-update only after a successful check; install never calls main,
         # so it cannot recurse back into automatic updates.
