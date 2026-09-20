@@ -56,6 +56,7 @@ MUTE_FILE = HOME / ".claude-usage-mute-until"
 ALERT_STATE = "/tmp/claude-usage-alert-state"
 LASTSEEN_FILE = HOME / ".claude-usage-lastseen"
 UPDATE_STATUS = HOME / ".claude-usage-update-status"
+UPDATE_RESULT = HOME / ".claude-usage-update-result.json"
 PRICING_STATUS = HOME / ".claude-usage-pricing-status.json"
 CC_USAGE = str(WIDGET_DIR / "claude_code_usage.py")
 CODEX_USAGE = str(WIDGET_DIR / "codex_usage.py")
@@ -441,9 +442,11 @@ def main() -> int:
 
     # --- prediction ----------------------------------------------------------
     pred_verdict = pred_eta = ""
+    weekly_forecast = {}
     pj = run_json([PREDICT, session_reset, week_reset], 3)
     if isinstance(pj, dict):
         wk = pj.get("weekly") or {}
+        weekly_forecast = wk
         pred_verdict = wk.get("verdict") or ""
         pred_eta = wk.get("eta_iso") or ""
 
@@ -610,10 +613,10 @@ def main() -> int:
             sep()
         else:
             print_metric("Weekly · all models", week, week_reset_txt)
-            if not OFFLINE and pred_verdict == "throttle" and pred_eta:
-                emit(f"  ⚡ at this pace ~100% {fmt_reset_iso(pred_eta)} | size=11 {colorkey(color_for_pct(90))}")
-            elif not OFFLINE and pred_verdict == "headroom":
-                emit(f"  on track to reset before the cap | size=11 {colorkey(color_for_pct(30))}")
+            if not OFFLINE:
+                from predict import planning_lines
+                for line in planning_lines(week, week_reset, weekly_forecast):
+                    emit(f"  {_san(line)} | size=11 color={LBL}")
             sep()
 
     for name, pct, reset in scoped:
@@ -873,8 +876,14 @@ def _render_footer():
         upd_behind, upd_sha, upd_ts = int(parts[0]), parts[1], int(parts[2])
     except Exception:
         pass
+    update_result = {}
+    try:
+        update_result = json.loads(UPDATE_RESULT.read_text())
+    except (OSError, ValueError):
+        pass
+    checked_at = update_result.get("checked_at", upd_ts)
     if not RENDER_ONLY:
-        if not UPDATE_STATUS.exists() or (upd_ts and datetime.now().timestamp() - upd_ts > UPDATE_CHECK_INTERVAL):
+        if not checked_at or datetime.now().timestamp() - checked_at > UPDATE_CHECK_INTERVAL:
             subprocess.Popen(["bash", CHECK_UPDATE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
     emit("More | sfimage=ellipsis.circle")
@@ -916,7 +925,16 @@ def _render_footer():
     if Path(CHECK_PRICING).exists():
         emit(f"-- Check rates now | bash='{PYTHON}' param1='{CHECK_PRICING}' terminal=false refresh=true")
 
-    if upd_behind > 0:
+    state = update_result.get("state")
+    if state:
+        sep()
+        emit(f"{_san(update_result.get('message', ''))} | size=11 color={LBL}")
+        for change in update_result.get("changes", [])[:5]:
+            emit(f"  • {_san(change)} | size=11 color={LBL}")
+        if state in ("error", "offline"):
+            action = UPDATE_SCRIPT if state == "error" else CHECK_UPDATE
+            emit(f"Retry {'update' if state == 'error' else 'check'} | bash='/bin/bash' param1='{action}' terminal=false refresh=true")
+    if (state == "available") or (not state and upd_behind > 0):
         sep()
         emit(f"⬆ Update available ({upd_behind} new) | color=#FF9500 sfimage=arrow.down.circle.fill")
         emit(f"Update now | bash='/bin/bash' param1='{UPDATE_SCRIPT}' terminal=false refresh=true sfimage=arrow.down.circle")
