@@ -1,0 +1,21 @@
+name: SwiftBar checks
+on:
+  pull_request:
+    paths: ['*.py', 'tests/**', 'plugins/**', '.github/workflows/swiftbar.yml']
+  push:
+    branches: [master]
+    paths: ['*.py', 'tests/**', 'plugins/**', '.github/workflows/swiftbar.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pytest
+      - run: python -m pytest -q
+      - run: bash -n plugins/claude-usage.5m.sh
