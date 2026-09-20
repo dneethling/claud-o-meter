@@ -33,17 +33,41 @@ detects your Claude org from your browser, wires up the menu bar and the backgro
 cookie refresh, and launches it. Make sure you are signed into the Claude desktop app, or `claude.ai` in Arc,
 Chrome, or Brave first, so it can read your session. That is the whole install.
 
+## Guided Mac installer
+
+The source includes a **Claud-o-meter Setup.app** builder in `installer/`.
+It provides setup dialogs, checks for Homebrew, runs installation without asking
+you to type Terminal commands, and offers an error log and help if setup fails.
+It preserves an existing SwiftBar plugin folder and adds a managed launcher;
+custom or duplicate Claude plugins are left for you to review, never overwritten.
+
+The installer requires Homebrew and Apple Command Line Tools. If they are missing,
+setup explains what is needed; it does not silently install Homebrew or bypass
+macOS security. Builds are currently ad-hoc signed, not Developer ID signed or
+notarized, so macOS may block a downloaded build. A trusted public installer needs
+Developer ID signing and notarization before distribution.
+
+**For maintainers:** `bash installer/build.sh` on a Mac creates
+`build/installer/Claud-o-meter-Setup.zip`. CI builds the same app as a review
+artifact. It installs the stable `master` branch, so do not distribute this new
+installer until its companion scripts have been merged there. CI validates app
+compilation/signature structure; a fresh-user Mac installation still needs testing.
+
 ## Updating
 
 The dropdown checks GitHub for new versions (in the background, at most every 6 hours):
 
 - When a new version is available it shows **"⬆ Update available"** with an **Update now**
-  button - one click pulls the latest and refreshes.
+  button, with up to five incoming commit summaries so you can see what changed.
 - Or click **Check for updates** any time.
 - For hands-off updates, add `AUTO_UPDATE=1` to `~/.claude-usage-widget.conf` and it
   pulls automatically when the background check finds a new version.
 
-Updates are `git pull --ff-only`, so they never clobber local edits, and your config
+Updates fetch with a timeout and fast-forward to the checked commit. Local changes
+or diverged history stop the update. A failed network check says it could not check,
+rather than claiming you are current. Success is reported only after Python
+dependencies and the background refresh agent finish; incomplete setup offers
+**Retry update** even if the new code has already downloaded. Your config
 (cookie, org) lives outside the repo and is never touched. **View on GitHub** in the
 dropdown opens the repo.
 
@@ -147,7 +171,21 @@ Errors and incidents always keep their warning colour regardless of theme.
 
 ### Prediction and reset pings
 
-Under the Weekly row, once enough history has accumulated, the widget projects your burn rate: `at this pace ~100% <when>` (red) if you would be throttled before the weekly resets, or `on track to reset before the cap` (green) if you have headroom. When a limit resets, a one-time notification tells you you are clear to go again.
+Under the Weekly row, the widget now shows an even-spend guide. For example,
+**32% left over four days → about 8 percentage points per day**. If less than a
+day remains, it shows the allowance available for those remaining hours instead
+of an inflated daily figure. This is a planning estimate, not a provider-granted
+extra allowance; unused daily budget is still part of the same weekly pool.
+
+After at least three readings spread over 30 minutes, the widget estimates
+whether your allowance should last until reset, or gives the projected run-out
+and reset dates together. It uses up to 24 hours of recent, reset-aware history.
+Stale readings (over 15 minutes old), missing reset times and pending resets do
+not produce a confident run-out claim. Quiet usage is labelled as steady rather
+than promising unlimited headroom. Changes in model or workload can change pace.
+
+Offline mode hides these planning estimates. When a fresh reading shows a limit
+reset, the existing one-time reset notification still tells you you can go again.
 
 ## What each menu-bar state means
 
