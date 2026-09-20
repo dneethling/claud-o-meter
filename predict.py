@@ -58,11 +58,13 @@ def linfit(points):
     return slope, ys[-1]
 
 
-def predict_metric(points, reset_dt, now):
+def predict_metric(points, reset_dt, now, window_seconds=None):
     """Return {eta_iso, verdict, slope_per_hr?} for one metric's sample series."""
     # Fit recent, ordered samples only. An old reading is not today's pace;
     # duplicate refreshes at one timestamp must not overweight that moment.
     cutoff = now.timestamp() - 24 * 3600
+    if reset_dt and window_seconds:
+        cutoff = max(cutoff, reset_dt.timestamp() - window_seconds)
     by_time = {float(ts): float(pct) for ts, pct in points
                if math.isfinite(ts) and math.isfinite(pct)
                and cutoff <= ts <= now.timestamp() and 0 <= pct <= 100}
@@ -165,8 +167,8 @@ def main():
     session_pts, weekly_pts = load_history()
     out = {
         "available": True,
-        "session": predict_metric(session_pts, session_reset, now),
-        "weekly": predict_metric(weekly_pts, weekly_reset, now),
+        "session": predict_metric(session_pts, session_reset, now, 5 * 3600),
+        "weekly": predict_metric(weekly_pts, weekly_reset, now, 7 * 24 * 3600),
     }
     sys.stdout.write(json.dumps(out))
 
