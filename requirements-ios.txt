@@ -1,0 +1,8 @@
+# Extra dependencies for the iOS push relay (ios_relay.py).
+# The base requirements.txt (curl_cffi) is still needed — the relay reuses
+# fetch_usage.py to pull your Claude usage.
+#
+#   pip install -r requirements.txt -r requirements-ios.txt
+
+cryptography     # ES256 JWT signing for APNs token auth
+httpx[http2]     # HTTP/2 transport to APNs (curl_cffi is used as a fallback)

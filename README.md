@@ -20,6 +20,28 @@ There's no public API for Claude usage. The widget hits the same internal endpoi
 
 The "test-each-cookie-against-the-API" step is what stops a stale session in Chrome Profile 2 from drowning out a valid session in Arc Profile 5.
 
+## iOS companion — live meters in the Dynamic Island
+
+Want the same session/weekly meters **on your iPhone** while you code? There's an
+optional Live Activity companion: a Dynamic Island pill (and Lock Screen card)
+that updates in near-real-time.
+
+Because iOS is sandboxed (no floating overlays, and an app can't read your Claude
+cookie), a small **cross-platform relay** — `ios_relay.py`, which reuses this
+repo's `fetch_usage.py` — fetches your usage and pushes it to the phone via Apple
+Push Notification service. The relay runs on macOS, Linux, or Windows; only
+*building the app* needs a Mac with Xcode, and live push needs a paid Apple
+Developer account.
+
+**→ Full setup guide: [`docs/ios/README.md`](docs/ios/README.md)**
+
+```bash
+pip install -r requirements.txt -r requirements-ios.txt
+python ios_relay.py --self-test     # preview the exact payload the phone receives
+python ios_relay.py --init          # scaffold ~/.claude-usage-ios.conf, then fill it in
+python ios_relay.py                 # run the relay
+```
+
 ## Install (one command)
 
 Requires [Homebrew](https://brew.sh). Then:
@@ -187,3 +209,6 @@ Allow notifications for `osascript` or `Script Editor` in System Settings → No
 | `~/.claude-usage-widget.conf` | Endpoint + current cookie (created on first refresh) - mode 600 |
 | `~/.claude-usage-widget.conf.lock` | Empty lock file used by atomic writes |
 | `/tmp/claude-usage-*.log` | Logs (see Troubleshooting) |
+| `ios_relay.py` | iOS Live Activity relay (fetch → push via APNs); see `docs/ios/` |
+| `lib/usage_state.py`, `lib/apns.py` | Relay internals: usage→meter mapping, APNs client |
+| `ios/` | The Claude Meter iOS app + Live Activity (Xcode, via XcodeGen) |
