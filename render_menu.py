@@ -33,6 +33,7 @@ import math
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -48,6 +49,7 @@ RENDER_ONLY = "--render-only" in sys.argv[1:]
 # --- paths (mirror the bash) -------------------------------------------------
 CONFIG = HOME / ".claude-usage-widget.conf"
 RAW = Path("/tmp/claude-usage-raw.json")
+REJECTED = Path("/tmp/claude-usage-rejected.json")
 ERR_LOG = "/tmp/claude-usage-err.log"
 CC_SUMMARY = HOME / ".claude-usage-cc-summary.json"
 CODEX_SUMMARY = HOME / ".claude-usage-codex-summary.json"
@@ -418,7 +420,6 @@ def main() -> int:
     # shape must not destroy the data used during the next network outage.
     if not shape_broken and not RENDER_ONLY and not OFFLINE:
         try:
-            import tempfile
             with tempfile.NamedTemporaryFile(mode="w", dir=RAW.parent, delete=False) as cache:
                 cache.write(raw)
                 cache_path = Path(cache.name)
@@ -426,6 +427,22 @@ def main() -> int:
                 os.replace(cache_path, RAW)
             finally:
                 cache_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    # An unrecognized response is saved separately, so the shape-error tile can
+    # show the ACTUAL rejected payload (RAW still holds the last-good reading).
+    if shape_broken and not RENDER_ONLY and raw.strip():
+        try:
+            # Atomic replace, so a pre-planted /tmp symlink can't redirect the
+            # write through to an unrelated file the widget user can clobber.
+            with tempfile.NamedTemporaryFile(mode="w", dir=REJECTED.parent, delete=False) as rej:
+                rej.write(raw)
+                rej_path = Path(rej.name)
+            try:
+                os.replace(rej_path, REJECTED)
+            finally:
+                rej_path.unlink(missing_ok=True)
         except OSError:
             pass
 
@@ -464,10 +481,10 @@ def main() -> int:
         emit("Claude Usage Dashboard | href=https://claude.ai/settings/usage size=14")
         sep()
         emit("API shape may have changed | color=#FF9500")
-        emit("Open the raw JSON below — if Anthropic renamed a key, paste the snippet")
-        emit("to the maintainer so the plugin can be updated.")
+        emit("Open the unrecognised response below — if Anthropic renamed a key, paste")
+        emit("the snippet to the maintainer so the plugin can be updated.")
         sep()
-        emit(f"View raw JSON | bash='/usr/bin/open' param1='-t' param2='{RAW}' terminal=false sfimage=doc.text")
+        emit(f"View unrecognised response | bash='/usr/bin/open' param1='-t' param2='{REJECTED}' terminal=false sfimage=doc.text")
         emit("Refresh now | refresh=true sfimage=arrow.clockwise")
         emit(f"Edit config | bash='/usr/bin/open' param1='-t' param2='{CONFIG}' terminal=false sfimage=pencil")
         emit("Quit (until next interval) | href=https://claude.ai/settings/usage")
@@ -643,6 +660,24 @@ def main() -> int:
 
 def _san(s: str) -> str:
     return (s or "").replace("|", " ").replace("\n", " ").replace("\r", " ")
+
+def _paramq(s) -> str:
+    """Return a value wrapped in quotes safe for a SwiftBar paramN=... field.
+
+    SwiftBar ends a quoted value at the first matching quote and does NOT join
+    shell-style quoted segments, so we pick the quote type the value lacks
+    (double quotes for an install path containing an apostrophe). Newline/CR
+    break the row protocol and are dropped - neither belongs in a real path. A
+    clean path stays single-quoted, so normal installs render exactly as before.
+    """
+    s = str(s).replace("\r", "").replace("\n", "")
+    if "'" not in s:
+        return f"'{s}'"
+    if '"' not in s:
+        return f'"{s}"'
+    # Both quote types: no safe quoting exists. Fail closed to an inert value so
+    # the action does nothing, rather than silently pointing at a different file.
+    return "''"
 
 def _summ(path: Path, keys: list[str]):
     try:
@@ -849,7 +884,7 @@ def _render_preferences():
     for label, key, selected, choices in groups:
         emit(f"-- {label}")
         for value, title in choices:
-            emit(f"---- {title} | bash='{PYTHON}' param1='{script}' param2='{key}' param3='{value}' terminal=false refresh=true checked={'true' if selected == value else 'false'}")
+            emit(f"---- {title} | bash={_paramq(PYTHON)} param1={_paramq(script)} param2='{key}' param3='{value}' terminal=false refresh=true checked={'true' if selected == value else 'false'}")
 
 
 def _render_footer():
@@ -858,8 +893,8 @@ def _render_footer():
     emit(f"Copy status | bash='/bin/bash' param1='-c' param2='\"{PYTHON}\" \"{COPY_SUMMARY}\" | pbcopy' terminal=false sfimage=doc.on.clipboard")
     _render_preferences()
     emit("Export usage | sfimage=square.and.arrow.up")
-    emit(f"-- as CSV | bash='{PYTHON}' param1='{EXPORT}' param2='csv' terminal=false")
-    emit(f"-- as JSON | bash='{PYTHON}' param1='{EXPORT}' param2='json' terminal=false")
+    emit(f"-- as CSV | bash={_paramq(PYTHON)} param1={_paramq(EXPORT)} param2='csv' terminal=false")
+    emit(f"-- as JSON | bash={_paramq(PYTHON)} param1={_paramq(EXPORT)} param2='json' terminal=false")
 
     if _muted_display():
         mt = fmt_reset_epoch(MUTE_FILE.read_text().strip())
@@ -889,7 +924,7 @@ def _render_footer():
     emit("More | sfimage=ellipsis.circle")
     emit("-- Open settings | href=https://claude.ai/settings/usage")
     emit(f"-- Edit config | bash='/usr/bin/open' param1='-t' param2='{CONFIG}' terminal=false")
-    emit(f"-- Force cookie refresh | bash='{PYTHON}' param1='{REFRESHER}' terminal=false refresh=true")
+    emit(f"-- Force cookie refresh | bash={_paramq(PYTHON)} param1={_paramq(REFRESHER)} terminal=false refresh=true")
     emit("-----")
     emit(f"-- View raw JSON | bash='/usr/bin/open' param1='-t' param2='{RAW}' terminal=false")
     emit(f"-- View error log | bash='/usr/bin/open' param1='-t' param2='{ERR_LOG}' terminal=false")
@@ -923,7 +958,7 @@ def _render_footer():
     if not RENDER_ONLY and Path(CHECK_PRICING).exists() and (not PRICING_STATUS.exists() or pr_age >= 7):
         subprocess.Popen([PYTHON, CHECK_PRICING], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     if Path(CHECK_PRICING).exists():
-        emit(f"-- Check rates now | bash='{PYTHON}' param1='{CHECK_PRICING}' terminal=false refresh=true")
+        emit(f"-- Check rates now | bash={_paramq(PYTHON)} param1={_paramq(CHECK_PRICING)} terminal=false refresh=true")
 
     state = update_result.get("state")
     if state:

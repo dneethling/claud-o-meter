@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 STATE = Path.home() / ".claude-usage-update-result.json"
 LEGACY = Path.home() / ".claude-usage-update-status"
+# Set once code has been fetched/merged but before dependencies and the launch
+# agent are back in place. It outlives an offline check, a behind==0 check and a
+# process restart, so a half-finished update keeps offering Retry until setup
+# actually completes - it is never a transient "you are up to date".
+PENDING = Path.home() / ".claude-usage-update-pending"
+PENDING_MESSAGE = "Update downloaded but setup did not finish. Choose Retry update."
 
 
 def atomic_write(path, text):
@@ -26,10 +33,43 @@ def atomic_write(path, text):
         temp.unlink(missing_ok=True)
 
 
+def _mark_pending(on):
+    try:
+        if on:
+            PENDING.write_text("setup")
+        else:
+            PENDING.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _is_pending():
+    return PENDING.exists()
+
+
 def run(args, timeout=60):
-    return subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                          timeout=timeout, check=True,
-                          env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    """Run a command in its own session so a timeout can kill the whole tree.
+
+    subprocess.run(timeout=) only signals the direct child, leaving a hung git
+    transport or pip build subprocess alive to overlap a later retry. Starting a
+    new session makes the child a group leader, so on timeout we kill the group.
+    """
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    with subprocess.Popen(args, cwd=ROOT, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True,
+                          start_new_session=True, env=env) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
+            proc.communicate()
+            raise
+        if proc.returncode != 0:
+            raise subprocess.CalledProcessError(proc.returncode, args, out, err)
+        return subprocess.CompletedProcess(args, proc.returncode, out, err)
 
 
 def save(state, message, **extra):
@@ -43,9 +83,16 @@ def check(for_install=False):
         previous = json.loads(STATE.read_text())
     except (OSError, ValueError):
         previous = {}
+    pending = _is_pending()
     try:
         run(["git", "fetch", "--quiet", "origin"])
     except (subprocess.SubprocessError, OSError):
+        # An unfinished setup keeps its "Retry update" even while offline - and
+        # even for an install() call, so an offline auto-retry does not downgrade
+        # the pending error to a plain "offline / Retry check". Only a clean
+        # checkout is allowed to report "offline" and move on.
+        if pending:
+            return save("error", PENDING_MESSAGE, version=previous.get("version", "?"))
         return save("offline", "Could not check for updates. Check your connection and retry.")
     try:
         local = run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()
@@ -57,6 +104,9 @@ def check(for_install=False):
         atomic_write(LEGACY, f"{behind} {local} {int(time.time())}\n")
         if dirty or (ahead and behind):
             return save("blocked", "Local changes need review before updating. Your files have been kept.", version=local)
+        # A pending setup wins over "current"/"error"/new commits: finish it first.
+        if pending and not for_install:
+            return save("error", PENDING_MESSAGE, version=local)
         if not for_install and not behind and previous.get("state") == "error":
             return save("error", previous["message"], version=local)
         notes = run(["git", "log", "--format=%s", "-5", "HEAD.." + upstream]).stdout.splitlines() if behind else []
@@ -72,6 +122,8 @@ def install():
     if result["state"] not in ("available", "current"):
         return result
     save("installing", "Installing update…")
+    # Mark setup incomplete before any code changes; only a full success clears it.
+    _mark_pending(True)
     phase = "downloaded code"
     try:
         # Fetch and check above, then merge the exact checked commit.
@@ -85,6 +137,7 @@ def install():
         version = run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()
     except (subprocess.SubprocessError, OSError):
         return save("error", f"Update incomplete at {phase}. Choose Retry update; your configuration was kept.")
+    _mark_pending(False)
     atomic_write(LEGACY, f"0 {version} {int(time.time())}\n")
     return save("installed", "Update installed. Refresh the widget to use it.", version=version)
 
@@ -103,10 +156,11 @@ def main():
             return 3
         result = install() if action == "install" else check()
         # Auto-update only after a successful check; install never calls main,
-        # so it cannot recurse back into automatic updates.
+        # so it cannot recurse back into automatic updates. A pending setup is
+        # also finished automatically here, so it self-heals without a click.
         config = Path.home() / ".claude-usage-widget.conf"
         auto = config.exists() and "AUTO_UPDATE=1" in config.read_text().splitlines()
-        if action == "check" and auto and result["state"] == "available":
+        if action == "check" and auto and (result["state"] == "available" or _is_pending()):
             result = install()
         print(result["message"])
         return 0 if result["state"] in ("current", "available", "installed") else 1

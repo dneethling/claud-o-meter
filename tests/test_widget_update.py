@@ -12,6 +12,7 @@ def isolate(monkeypatch, tmp_path, *, behind=0, ahead=0, dirty=False, fetch_fail
     monkeypatch.setattr(update, "ROOT", tmp_path)
     monkeypatch.setattr(update, "STATE", tmp_path / "state.json")
     monkeypatch.setattr(update, "LEGACY", tmp_path / "legacy")
+    monkeypatch.setattr(update, "PENDING", tmp_path / "pending")
     calls = []
     def run(args, **kwargs):
         calls.append(args)
@@ -77,6 +78,37 @@ def test_release_notes_come_from_incoming_changes(monkeypatch, tmp_path):
     result = update.check()
     assert result["state"] == "available"
     assert result["changes"] == ["Clearer forecasts", "Better setup"]
+
+
+def test_pending_setup_survives_an_offline_check(monkeypatch, tmp_path):
+    isolate(monkeypatch, tmp_path, behind=2, dependency_fails=True)
+    assert update.install()["state"] == "error"     # merge ok, deps fail -> pending set
+    assert update.PENDING.exists()
+    isolate(monkeypatch, tmp_path, fetch_fails=True)  # network drops before the retry
+    assert update.check()["state"] == "error"         # not "offline" - Retry survives
+    assert update.PENDING.exists()
+
+
+def test_offline_retry_keeps_update_not_check_while_pending(monkeypatch, tmp_path):
+    isolate(monkeypatch, tmp_path, behind=2, dependency_fails=True)
+    update.install()                                  # leaves pending
+    isolate(monkeypatch, tmp_path, fetch_fails=True)  # network drops on the auto/manual retry
+    assert update.install()["state"] == "error"       # stays "Retry update", never downgrades to offline
+
+
+def test_pending_setup_shows_retry_even_when_up_to_date(monkeypatch, tmp_path):
+    isolate(monkeypatch, tmp_path)                    # behind == 0
+    update.PENDING.write_text("setup")
+    assert update.check()["state"] == "error"         # not "current" while setup is unfinished
+
+
+def test_retry_finishes_and_clears_pending_setup(monkeypatch, tmp_path):
+    isolate(monkeypatch, tmp_path, behind=2, dependency_fails=True)
+    update.install()                                  # leaves pending
+    assert update.PENDING.exists()
+    isolate(monkeypatch, tmp_path)                    # deps now succeed, already merged
+    assert update.install()["state"] == "installed"
+    assert not update.PENDING.exists()
 
 
 def test_busy_update_cannot_be_reported_as_installed(monkeypatch, tmp_path):

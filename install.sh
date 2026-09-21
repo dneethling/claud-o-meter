@@ -49,8 +49,16 @@ echo "Setting up the Python environment ..."
 if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then
   echo "Installing Python 3.10 or newer ..."
   brew install python
+  hash -r   # forget the cached path to Apple's old python3, so the next lookup finds brew's
 fi
-python3 -m venv .venv
+# Resolve python3 AFTER any install and validate it, so we never build the venv
+# on the stale interpreter bash had hashed before the upgrade.
+PY=$(command -v python3 || true)
+if [ -z "$PY" ] || ! "$PY" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then
+  echo "Python 3.10+ is required but was not found on PATH after install. Open a new Terminal and re-run setup." >&2
+  exit 1
+fi
+"$PY" -m venv .venv
 ./.venv/bin/pip install -q --upgrade pip
 ./.venv/bin/pip install -q -r requirements.txt
 

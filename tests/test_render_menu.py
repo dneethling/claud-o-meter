@@ -18,7 +18,7 @@ def render(monkeypatch, tmp_path, payload, *, offline=False, compact=False, side
     monkeypatch.setattr(menu, "THEME", "semantic")
     monkeypatch.setattr(menu, "STATUS_ALERT", "off")
     monkeypatch.setattr(menu, "MENUBAR_MODE", "claude")
-    for name in ["RAW", "HISTORY_FILE", "LASTSEEN_FILE", "CC_SUMMARY", "CODEX_SUMMARY", "MUTE_FILE"]:
+    for name in ["RAW", "REJECTED", "HISTORY_FILE", "LASTSEEN_FILE", "CC_SUMMARY", "CODEX_SUMMARY", "MUTE_FILE"]:
         monkeypatch.setattr(menu, name, tmp_path / name)
     monkeypatch.setattr(menu, "run_json", lambda args, *rest: codex if args[0] == menu.CODEX_USAGE else None)
     monkeypatch.setattr(menu, "_render_footer", lambda: None)
@@ -61,12 +61,27 @@ def test_offline_does_not_fire_alerts_or_change_last_good_history(monkeypatch, t
     assert "Nearly at limit" not in text
 
 
-def test_unknown_shape_preserves_cache_and_does_not_fire_alerts(monkeypatch, tmp_path):
+def test_unknown_shape_preserves_cache_and_saves_rejected_payload(monkeypatch, tmp_path):
     (tmp_path / "RAW").write_text("saved")
     text, alerts = render(monkeypatch, tmp_path, {"renamed": {}}, side_effects=True)
     alerts.assert_not_called()
-    assert (tmp_path / "RAW").read_text() == "saved"
+    assert (tmp_path / "RAW").read_text() == "saved"          # last-good cache untouched
+    assert json.loads((tmp_path / "REJECTED").read_text()) == {"renamed": {}}  # broken payload saved
     assert "API shape may have changed" in text
+    assert str(tmp_path / "REJECTED") in text                  # diagnostic points at the rejected file
+    assert str(tmp_path / "RAW") not in text.split("View unrecognised response")[1].split("\n")[0]
+
+
+def test_paramq_quotes_paths_safely_for_swiftbar():
+    # clean path -> single-quoted, byte-identical to the old inline quoting
+    assert menu._paramq("/Users/x/claud-o-meter/.venv/bin/python") == "'/Users/x/claud-o-meter/.venv/bin/python'"
+    # apostrophe path -> double-quoted (SwiftBar can't join shell-style segments)
+    assert menu._paramq("/Users/o'brien/w") == '"/Users/o\'brien/w"'
+    # row-breaking characters are dropped
+    assert "\n" not in menu._paramq("/a/b\nrm -rf/x")
+    assert "\r" not in menu._paramq("/a/b\r/x")
+    # a path with BOTH quote types can't be quoted safely -> fail closed (inert), never a wrong path
+    assert menu._paramq("/x/o'\"weird/p") == "''"
 
 
 def test_valid_reading_updates_cache(monkeypatch, tmp_path):
