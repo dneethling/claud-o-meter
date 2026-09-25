@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import render_menu as menu
 
 
-def render(monkeypatch, tmp_path, payload, *, offline=False, compact=False, side_effects=False, codex=None):
+def render(monkeypatch, tmp_path, payload, *, offline=False, compact=False, side_effects=False, codex=None, predict=None):
     menu._out.clear()
     monkeypatch.setattr(menu, "OFFLINE", offline)
     monkeypatch.setattr(menu, "RENDER_ONLY", not side_effects)
@@ -20,7 +20,7 @@ def render(monkeypatch, tmp_path, payload, *, offline=False, compact=False, side
     monkeypatch.setattr(menu, "MENUBAR_MODE", "claude")
     for name in ["RAW", "REJECTED", "HISTORY_FILE", "LASTSEEN_FILE", "CC_SUMMARY", "CODEX_SUMMARY", "MUTE_FILE"]:
         monkeypatch.setattr(menu, name, tmp_path / name)
-    monkeypatch.setattr(menu, "run_json", lambda args, *rest: codex if args[0] == menu.CODEX_USAGE else None)
+    monkeypatch.setattr(menu, "run_json", lambda args, *rest: codex if args[0] == menu.CODEX_USAGE else (predict if args[0] == menu.PREDICT else None))
     monkeypatch.setattr(menu, "_render_footer", lambda: None)
     alerts = Mock()
     monkeypatch.setattr(menu, "_alerts", alerts)
@@ -39,7 +39,8 @@ def test_weekly_limit_controls_warning_without_changing_title_meaning(monkeypatc
     assert text.splitlines()[0].startswith("20% · 95%w |")
     assert "color=#FF3B30" in text.splitlines()[0]
     assert "Nearly at limit · Weekly has 5% left" in text
-    assert "20% used · 80% left" in text
+    row = next(l for l in text.splitlines() if "Session · 5h" in l)
+    assert "20%" in row and "█" in row
 
 
 def test_model_limit_can_raise_warning(monkeypatch, tmp_path):
@@ -94,7 +95,8 @@ def test_valid_reading_updates_cache(monkeypatch, tmp_path):
 def test_compact_keeps_secondary_codex_quota_even_without_primary(monkeypatch, tmp_path):
     codex = {"available": True, "quota": {"secondary": {"window": "5h", "used_percent": 42}}}
     text, _ = render(monkeypatch, tmp_path, payload(), compact=True, codex=codex)
-    assert "Quota · 5h · 42% used · 58% left" in text
+    row = next(l for l in text.splitlines() if "Quota · 5h" in l)
+    assert "42%" in row and "█" in row
     assert "Today ·" not in text
     assert "all-time" not in text
 
@@ -130,13 +132,29 @@ def test_preference_menu_marks_current_selection(monkeypatch):
     assert "param2='DETAIL_LEVEL' param3='compact'" in compact
 
 
-def test_weekly_planning_appears_only_with_live_reading(monkeypatch, tmp_path):
-    from datetime import datetime, timedelta, timezone
+def test_weekly_pace_line_is_one_verdict_and_hidden_offline(monkeypatch, tmp_path):
     data = payload(20, 68)
-    data["seven_day"]["resets_at"] = (datetime.now(timezone.utc) + timedelta(days=4)).isoformat()
-    text, _ = render(monkeypatch, tmp_path, data, compact=True)
-    assert "Budget ≈8.0 percentage points/day" in text
-    assert "Learning your pace" in text
-    text, _ = render(monkeypatch, tmp_path, data, offline=True)
-    assert "Budget ≈" not in text
-    assert "Learning your pace" not in text
+    forecast = {"weekly": {"verdict": "headroom"}}
+    text, _ = render(monkeypatch, tmp_path, data, predict=forecast)
+    assert "✓ on track to reset" in text           # one compact line, not the old 3-line plan
+    assert "percentage points/day" not in text      # verbose plan is gone
+    text, _ = render(monkeypatch, tmp_path, data, predict=forecast, offline=True)
+    assert "on track" not in text                   # no pace estimate on stale offline data
+
+
+def test_weekly_pace_line_warns_before_reset(monkeypatch, tmp_path):
+    data = payload(20, 92)
+    forecast = {"weekly": {"verdict": "throttle", "eta_iso": "2026-09-27T15:00:00+00:00"}}
+    text, _ = render(monkeypatch, tmp_path, data, predict=forecast)
+    assert "⚡ ~100% by" in text
+
+
+def test_weekly_pace_line_steady_makes_no_safety_claim(monkeypatch, tmp_path):
+    # A low slope near the cap is still near the cap: "flat/steady" must not
+    # promise the reset beats the cap or paint a green all-clear.
+    data = payload(20, 99)
+    forecast = {"weekly": {"verdict": "flat", "reason": "steady"}}
+    text, _ = render(monkeypatch, tmp_path, data, predict=forecast)
+    line = next(l for l in text.splitlines() if "steady pace" in l)
+    assert "resets before the cap" not in text   # no false all-clear at 99%
+    assert "✓" not in line                        # and no green tick on the steady line

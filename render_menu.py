@@ -79,6 +79,7 @@ UPDATE_CHECK_INTERVAL = 21600
 
 DARK = os.environ.get("CLAUDE_APPEARANCE", "light") == "dark"
 LBL = "#f2f2f7" if DARK else "#1c1c1e"
+DIM = "#8E8E93"  # secondary label, reads as muted on both light and dark
 DARKJSON = "true" if DARK else "false"
 SEC_CC = "#8F8CFF" if DARK else "#5E5CE6"
 SEC_CX = "#3ED9D3" if DARK else "#0E9F9A"
@@ -103,7 +104,7 @@ def _conf(key: str, default: str) -> str:
 MENUBAR_MODE = _conf("MENUBAR_MODE", "claude")
 DETAIL_LEVEL = _conf("DETAIL_LEVEL", "full")
 THEME = _conf("THEME", "semantic")
-GRAPHICS = _conf("GRAPHICS", "1")
+GRAPHICS = _conf("GRAPHICS", "0")  # native-only by default: instant menu, no webview/image hover bug
 STATUS_ALERT = _conf("STATUS_ALERT", "major")
 
 
@@ -234,11 +235,19 @@ def _b64(png: bytes) -> str:
     import base64
     return base64.b64encode(png).decode("ascii")
 
+# SwiftBar only shows a dropdown image at the size you ask for: without width=
+# /height= params it falls back to a tiny natural size (see SwiftBar's
+# MenuLineParameters.resizedImageIfRequested). So the *_img helpers return the
+# full "image=.. width=.. height=.." token, rendered at 2x for a crisp retina fit.
+METER_PT = (120, 13)
+SPARK_PT = (200, 34)
+
 def meter_img(pint: str, clr: str) -> str:
     if GRAPHICS != "1" or not _render_ok or not clr:
         return ""
     try:
-        return _b64(_ra.meter(int(pint) / 100.0, clr, DARK, 60, 12))
+        w, h = METER_PT
+        return f"image={_b64(_ra.meter(int(pint) / 100.0, clr, DARK, w, h))} width={w} height={h}"
     except Exception:
         return ""
 
@@ -261,7 +270,8 @@ def spark_img(vals: str, clr: str) -> str:
             nums.append(float(f"{v:.6g}"))
         if not nums:
             return ""
-        return _b64(_ra.spark(nums, clr, DARK, 104, 24))
+        w, h = SPARK_PT
+        return f"image={_b64(_ra.spark(nums, clr, DARK, w, h))} width={w} height={h}"
     except Exception:
         return ""
 
@@ -279,15 +289,18 @@ def print_metric(label: str, pct, reset: str) -> None:
     if not pint:
         return
     clr = color_for_pct(pint)
-    info = f"{_san(label)} · {pint}% used · {max(0, 100 - int(pint))}% left"
-    if reset:
-        info = f"{info} · resets {reset}"
     img = meter_img(pint, clr)
     if img:
-        emit(f"{info} | size=12 color={LBL} image={img}")
+        info = f"{_san(label)} · {pint}%"
+        if reset:
+            info = f"{info} · resets {reset}"
+        emit(f"{info} | size=12 color={LBL} {img}")
     else:
-        emit(f"{info} | size=12 color={LBL}")
-        emit(f"{progress_bar(pint)} | font=Menlo size=12 {colorkey(clr)}")
+        # Native row: fixed-width unicode meter + right-aligned % first, so the
+        # bars and numbers line up into a clean column and the label trails.
+        emit(f"{progress_bar(pint)}  {int(pint):>3}%  {_san(label)} | font=Menlo size=13 {colorkey(clr)}")
+        if reset:
+            emit(f"  resets {reset} | size=11 color={DIM}")
 
 
 def run_json(args: list[str], timeout: float, summary_path: Path | None = None):
@@ -559,6 +572,8 @@ def main() -> int:
         title_color = "#FF9500"
     if OFFLINE:
         title = f"⏸ {title}"
+    # No href on the title line: a left-click of the menu-bar icon shows the
+    # native dropdown instantly (no webview to spin up).
     emit(f"{title} | {icon} {colorkey(title_color)} size=12")
 
     # --- dropdown ------------------------------------------------------------
@@ -616,7 +631,7 @@ def main() -> int:
             trend = _session_trend()
             s_img = spark_img(trend, color_for_pct(s_i))
             if s_img:
-                emit(f"  trend · last 2h | size=11 color={LBL} image={s_img}")
+                emit(f"  trend · last 2h | size=11 color={LBL} {s_img}")
             else:
                 spark = sparkline(trend)
                 if spark:
@@ -631,9 +646,19 @@ def main() -> int:
         else:
             print_metric("Weekly · all models", week, week_reset_txt)
             if not OFFLINE:
-                from predict import planning_lines
-                for line in planning_lines(week, week_reset, weekly_forecast):
-                    emit(f"  {_san(line)} | size=11 color={LBL}")
+                # One compact pace line instead of the three-line plan: the
+                # verdict is the actionable bit; the bar already shows the rest.
+                v = weekly_forecast.get("verdict")
+                eta = weekly_forecast.get("eta_iso")
+                if v == "throttle" and eta:
+                    emit(f"  ⚡ ~100% by {fmt_reset_iso(eta)} | size=11 {colorkey(color_for_pct(90))}")
+                elif v == "headroom":
+                    emit(f"  ✓ on track to reset | size=11 {colorkey(color_for_pct(30))}")
+                elif v == "flat" and weekly_forecast.get("reason") == "steady":
+                    # "flat/steady" only means the slope is low, not that you are
+                    # safe: at 99% a low slope is still 99%. State the pace
+                    # neutrally and leave the all-clear to the "headroom" verdict.
+                    emit(f"  · steady pace | size=11 color={DIM}")
             sep()
 
     for name, pct, reset in scoped:
@@ -818,7 +843,7 @@ def _render_claude_code():
         emit(f"7 days · {humanize_tokens(week.get('total_tokens', 0))} · 30 days · {humanize_tokens(month.get('total_tokens', 0))} | size=11 color={LBL}")
     cc_img = spark_img(daily, SEC_CC)
     if cc_img:
-        emit(f"  7-day trend | size=11 color={LBL} image={cc_img}")
+        emit(f"  7-day trend | size=11 color={LBL} {cc_img}")
     else:
         s = sparkline(daily)
         if s:
@@ -865,7 +890,7 @@ def _render_codex(compact=False):
     emit(f"{tail} | size=11 color={LBL}")
     cx_img = spark_img(daily, SEC_CX)
     if cx_img:
-        emit(f"  7-day trend | size=11 color={LBL} image={cx_img}")
+        emit(f"  7-day trend | size=11 color={LBL} {cx_img}")
     else:
         s = sparkline(daily)
         if s:
