@@ -1,0 +1,73 @@
+name: ClaudOMeterNotch
+options:
+  deploymentTarget:
+    macOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_ALLOWED: "YES"
+    ENABLE_APP_SANDBOX: "NO"
+    SPARKLE_PUBLIC_KEY: ""
+  configs:
+    Release:
+      ENABLE_HARDENED_RUNTIME: "YES"
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
+targets:
+  Codenotch:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    dependencies:
+      - package: Sparkle
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleName: ClaudOMeterNotch
+        CFBundleDisplayName: Claud-o-meter Notch
+        SUFeedURL: https://github.com/dneethling/claud-o-meter/releases/download/notch-updates/appcast.xml
+        SUPublicEDKey: "$(SPARKLE_PUBLIC_KEY)"
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: true
+        SUScheduledCheckInterval: 86400
+        LSMinimumSystemVersion: "26.0"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+    settings:
+      base:
+        PRODUCT_NAME: ClaudOMeterNotch
+        PRODUCT_MODULE_NAME: Codenotch
+        PRODUCT_BUNDLE_IDENTIFIER: com.darren.claudometer.notch
+        GENERATE_INFOPLIST_FILE: "NO"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  CodenotchTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Codenotch
+    settings:
+      base:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ClaudOMeterNotch.app/Contents/MacOS/ClaudOMeterNotch"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        PRODUCT_BUNDLE_IDENTIFIER: com.darren.claudometer.notch.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+schemes:
+  ClaudOMeterNotch:
+    build:
+      targets:
+        Codenotch: all
+        CodenotchTests: [test]
+    test:
+      config: Debug
+      targets:
+        - CodenotchTests
