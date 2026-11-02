@@ -151,12 +151,17 @@ def load_history():
         parts = line.split()
         if len(parts) != 3:
             continue
+        # "-" in the session column means no session limit that tick (the
+        # 5-hour limit was removed); the weekly sample must still count.
         try:
-            ts = float(parts[0]); s = float(parts[1]); w = float(parts[2])
+            ts = float(parts[0]); w = float(parts[2])
         except ValueError:
             continue
-        session.append((ts, s))
         weekly.append((ts, w))
+        try:
+            session.append((ts, float(parts[1])))
+        except ValueError:
+            pass
     return session, weekly
 
 

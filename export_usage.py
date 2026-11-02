@@ -43,9 +43,14 @@ def history_by_day():
         if len(parts) != 3:
             continue
         try:
-            ts = float(parts[0]); s = int(float(parts[1])); w = int(float(parts[2]))
+            ts = float(parts[0]); w = int(float(parts[2]))
         except ValueError:
             continue
+        # "-" = no session limit that tick (5-hour limit removed); keep weekly.
+        try:
+            s = int(float(parts[1]))
+        except ValueError:
+            s = None
         day = datetime.fromtimestamp(ts).astimezone().strftime("%Y-%m-%d")
         out[day] = (s, w)   # later lines overwrite -> last sample of the day wins
     return out
