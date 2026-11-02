@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
-RAW = Path("/tmp/claude-usage-raw.json")
+RAW = Path(os.environ.get("CLAUDE_USAGE_RAW", "/tmp/claude-usage-raw.json"))
 CC = Path.home() / ".claude-usage-cc-summary.json"
 CODEX = Path.home() / ".claude-usage-codex-summary.json"
 
@@ -35,13 +36,13 @@ lines = [f"Claude/Codex usage - {datetime.now().astimezone().strftime('%Y-%m-%d 
 
 raw = load(RAW)
 if raw:
-    s = raw.get("five_hour", {}).get("utilization")
-    w = raw.get("seven_day", {}).get("utilization")
+    s = (raw.get("five_hour") or {}).get("utilization")
+    w = (raw.get("seven_day") or {}).get("utilization")
     if s is not None:
         lines.append(f"Claude session (5h): {s:.0f}%")
     if w is not None:
         lines.append(f"Claude weekly:       {w:.0f}%")
-    spend = raw.get("spend", {})
+    spend = raw.get("spend") or {}
     if spend.get("enabled") and spend.get("percent") is not None:
         lines.append(f"Credits:             {spend['percent']}%")
 

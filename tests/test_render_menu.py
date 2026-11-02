@@ -158,3 +158,55 @@ def test_weekly_pace_line_steady_makes_no_safety_claim(monkeypatch, tmp_path):
     line = next(l for l in text.splitlines() if "steady pace" in l)
     assert "resets before the cap" not in text   # no false all-clear at 99%
     assert "✓" not in line                        # and no green tick on the steady line
+
+
+def no_session_payload(weekly=19):
+    # Shape since Anthropic removed the 5-hour limit: five_hour is present but null.
+    return {"five_hour": None, "seven_day": {"utilization": weekly, "resets_at": "2026-11-08T13:00:00+00:00"},
+            "limits": [{"kind": "weekly_all", "percent": weekly, "scope": None}]}
+
+
+def test_no_session_limit_title_leads_with_weekly(monkeypatch, tmp_path):
+    text, _ = render(monkeypatch, tmp_path, no_session_payload())
+    title = text.splitlines()[0]
+    assert title.startswith("19%w |")
+    assert "?%" not in title
+    assert "Session" not in text
+
+
+def test_malformed_session_object_still_flags_unknown(monkeypatch, tmp_path):
+    data = no_session_payload(95)
+    data["five_hour"] = {"utilization": "not-a-number"}
+    text, _ = render(monkeypatch, tmp_path, data)
+    assert text.startswith("?% · 95%w")
+
+
+def test_history_keeps_recording_weekly_without_session(monkeypatch, tmp_path):
+    import predict
+    render(monkeypatch, tmp_path, no_session_payload(), side_effects=True)
+    rows = (tmp_path / "HISTORY_FILE").read_text().split()
+    assert rows[1:] == ["-", "19"]
+    monkeypatch.setattr(predict, "HISTORY_PATH", tmp_path / "HISTORY_FILE")
+    session, weekly = predict.load_history()
+    assert session == [] and [w for _, w in weekly] == [19.0]
+    assert menu._session_trend().strip() == ""
+
+
+def test_copy_status_survives_null_session(tmp_path):
+    import os, subprocess
+    raw = tmp_path / "raw.json"
+    raw.write_text(json.dumps(no_session_payload()))
+    out = subprocess.run([sys.executable, str(Path(menu.__file__).with_name("copy_summary.py"))],
+                         env={**os.environ, "CLAUDE_USAGE_RAW": str(raw)}, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert "Claude weekly:       19%" in out.stdout
+    assert "session" not in out.stdout
+
+
+def test_export_reads_weekly_from_rows_without_session(monkeypatch, tmp_path):
+    import export_usage
+    hist = tmp_path / "hist"
+    hist.write_text("1793610000 30 18\n1793610300 - 19\n")
+    monkeypatch.setattr(export_usage, "HISTORY", hist)
+    (day, (s, w)), = export_usage.history_by_day().items()
+    assert (s, w) == (None, 19)

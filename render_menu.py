@@ -385,7 +385,11 @@ def main() -> int:
         d = {}
 
     # --- parse ---------------------------------------------------------------
-    five = d.get("five_hour") if isinstance(d.get("five_hour"), dict) else {}
+    # Anthropic dropped the 5-hour session limit (five_hour is null since late
+    # Oct 2026). "No session limit" is not "broken reading": only a present but
+    # malformed five_hour object should still show "?%".
+    has_session = isinstance(d.get("five_hour"), dict)
+    five = d.get("five_hour") if has_session else {}
     seven = d.get("seven_day") if isinstance(d.get("seven_day"), dict) else {}
     session = percentage(five.get("utilization"))
     session_reset = five.get("resets_at") or ""
@@ -460,10 +464,10 @@ def main() -> int:
             pass
 
     # --- history (side effect) ----------------------------------------------
-    if not RENDER_ONLY and s_i.isdigit() and w_i.isdigit() and not OFFLINE:
+    if not RENDER_ONLY and w_i.isdigit() and not OFFLINE:
         try:
             with open(HISTORY_FILE, "a") as f:
-                f.write(f"{int(datetime.now().timestamp())} {s_i} {w_i}\n")
+                f.write(f"{int(datetime.now().timestamp())} {s_i if s_i.isdigit() else '-'} {w_i}\n")
             lines = HISTORY_FILE.read_text().splitlines()
             if len(lines) > HISTORY_CAP:
                 HISTORY_FILE.write_text("\n".join(lines[-HISTORY_CAP:]) + "\n")
@@ -539,10 +543,11 @@ def main() -> int:
     if on_credits:
         icon = "sfimage=creditcard.fill"
         title_color = color_for_pct(spend_i)
-        title = f"{s_i or '?'}% · {spend_used_str}"
+        title = f"{s_i or '?'}% · {spend_used_str}" if has_session else spend_used_str
     else:
         title_color = color_for_pct(warning_pct)
-        ring = ring_img(s_i, title_color) if s_i.isdigit() else ""
+        lead = s_i if has_session else w_i
+        ring = ring_img(lead, title_color) if lead.isdigit() else ""
         if ring:
             icon = f"image={ring}"
         elif warning_pct.isdigit() and int(warning_pct) >= CRIT_PCT:
@@ -551,9 +556,12 @@ def main() -> int:
             icon = "sfimage=gauge.with.dots.needle.67percent"
         else:
             icon = "sfimage=gauge.with.dots.needle.33percent"
-        title = f"{s_i or '?'}%"
-        if w_i.isdigit():
-            title = f"{title} · {w_i}%w"
+        if has_session or not w_i.isdigit():
+            title = f"{s_i or '?'}%"
+            if w_i.isdigit():
+                title = f"{title} · {w_i}%w"
+        else:
+            title = f"{w_i}%w"
         if MENUBAR_MODE == "both":
             cc_t = _summ(CC_SUMMARY, ["today", "total_tokens"])
             if cc_t is not None:
@@ -716,7 +724,8 @@ def _summ(path: Path, keys: list[str]):
 def _session_trend() -> str:
     try:
         lines = HISTORY_FILE.read_text().splitlines()[-24:]
-        return " ".join(ln.split()[1] for ln in lines if len(ln.split()) >= 2) + " "
+        return " ".join(ln.split()[1] for ln in lines
+                        if len(ln.split()) >= 2 and ln.split()[1] != "-") + " "
     except Exception:
         return ""
 
@@ -782,8 +791,8 @@ def _alerts(s_i, w_i, spend_i, on_credits, spend_used_str, spend_limit_str, week
                 notify("Claude Usage", "Weekly limit reset - fresh week, clear to go", "weekly_reset_" + datetime.now().strftime("%Y%m%d"))
         except Exception:
             pass
-        if s_i.isdigit() and w_i.isdigit():
-            LASTSEEN_FILE.write_text(f"{s_i} {w_i}\n")
+        if w_i.isdigit():
+            LASTSEEN_FILE.write_text(f"{s_i if s_i.isdigit() else '-'} {w_i}\n")
         # New version available: banner once per (version, commits-behind) so it
         # never nags, reusing the usage-alert dedup + mute. Fires within a tick of
         # the 6-hourly background check finding the repo behind, with the menu
